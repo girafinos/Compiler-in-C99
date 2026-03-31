@@ -1,0 +1,202 @@
+#include "lexer_v1.h"
+
+void inicializar_lexer(Lexer *lexer, const char *source){
+    lexer->src = source;
+    lexer->pos = 0;
+    lexer->line = 1;
+    lexer->column = 1;
+
+    if (source[0] != '\0'){
+        lexer->current_char = source[0];
+    } else {
+        lexer->current_char = '\0';
+    }
+}   
+
+void andar_char(Lexer *lexer){
+    if (lexer->current_char != '\0'){
+        if(lexer->current_char == '\n'){
+            lexer->line++;
+            lexer->column = 1;
+        } else {
+            lexer->column++;
+        }
+
+        lexer->pos++;
+
+        if(lexer->src[lexer->pos] != '\0'){
+            lexer->current_char = lexer->src[lexer->pos];
+        } else {
+            lexer->current_char = '\0';
+        }
+    } else {
+        return;
+    }
+}
+
+char spoiler_prox_char(Lexer *lexer){
+    if(lexer->src[lexer->pos + 1] != '\0'){
+        return lexer->src[lexer->pos + 1];
+    } else {
+        return '\0';
+    }
+}
+
+void pular_espacos(Lexer *lexer){
+
+//     while(lexer->current_char == ' ' || lexer->current_char == '\t' || lexer->current_char == '\n' || lexer->current_char == '\r'){
+//         advance_char(lexer);
+//     }
+
+    while(lexer->current_char != '\0' && isspace(lexer->current_char)){
+        andar_char(lexer);   
+    }
+}
+
+Token cria_token(TokenType type, const char* lexema, int line, int column){
+    Token token;
+    token.type = type;
+    strcpy(token.lexema, lexema);
+    token.line = line;
+    token.column = column;
+    return token;
+}
+
+Token indetificadores(Lexer *lexer){
+    char buffer[100];
+    int i = 0;
+    int start_line = lexer->line;
+    int start_column = lexer->column; 
+
+    while((lexer->current_char != '\0') && (isalnum(lexer->current_char) || lexer->current_char == '_') && i<99){
+        buffer[i] = lexer->current_char;
+        i++;
+        andar_char(lexer);
+    }
+
+    buffer[i] = '\0';
+
+    if(strcmp(buffer, "int") == 0){
+        return cria_token(TOKEN_INT, buffer, start_line, start_column);
+    }
+    if(strcmp(buffer, "if") == 0){
+        return cria_token(TOKEN_IF, buffer, start_line, start_column);
+    }
+    return cria_token(TOKEN_ID, buffer, start_line, start_column);
+}
+
+Token numeros(Lexer *lexer){
+    char buffer[100];
+    int i = 0;
+    int start_line = lexer->line;
+    int start_column = lexer->column; 
+
+    while(lexer->current_char != '\0' && isdigit(lexer->current_char) && i<99){
+        buffer[i] = lexer->current_char;
+        i++;
+        andar_char(lexer);
+    }
+
+    buffer[i] = '\0';
+
+    return cria_token(TOKEN_NUM, buffer, start_line, start_column);
+}
+
+Token pegar_prox_token(Lexer *lexer){
+    while(lexer->current_char != '\0'){
+        if(isspace(lexer->current_char)){
+            pular_espacos(lexer);
+            continue;
+        }
+        if(isalpha(lexer->current_char) || lexer->current_char == '_'){
+            return indetificadores(lexer);
+        }
+        if(isdigit(lexer->current_char)){
+            return numeros(lexer);
+        }
+        if(lexer->current_char == '+'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_PLUS, "+", start_line, start_column);
+        }
+        if(lexer->current_char == '-'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_MINUS, "-", start_line, start_column); 
+        }
+        if(lexer->current_char == '='){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_ASSIGN, "=", start_line, start_column);
+        }
+        if(lexer->current_char == ';'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_SEMICOLON, ";", start_line, start_column);
+        }
+        {
+            char error_lexema[2];
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+
+            error_lexema[0] = lexer->current_char;
+            error_lexema[1] = '\0';
+
+            andar_char(lexer);
+            return cria_token(TOKEN_ERROR, error_lexema, start_line, start_column);
+
+        }
+    }
+    return cria_token(TOKEN_EOF, "EOF", lexer->line, lexer->column);
+}
+
+const char* token_para_string(TokenType type){
+    switch(type){
+        case TOKEN_ID: return "TOKEN_ID";
+        case TOKEN_NUM: return "TOKEN_NUM";
+        case TOKEN_INT: return "TOKEN_INT";
+        case TOKEN_IF: return "TOKEN_IF";
+        case TOKEN_PLUS: return "TOKEN_PLUS";
+        case TOKEN_MINUS: return "TOKEN_MINUS";
+        case TOKEN_ASSIGN: return "TOKEN_ASSIGN";
+        case TOKEN_SEMICOLON: return "TOKEN_SEMICOLON";
+        case TOKEN_EOF: return "TOKEN_EOF";
+        case TOKEN_ERROR: return "TOKEN_ERROR";
+        default: return "TOKEN_UNKNOWN";
+    }
+}
+
+void print_token(Token token){
+    printf("Token -> type: %s | lexema: \"%s\" | line: %d | column: %d\n",
+           token_para_string(token.type),
+           token.lexema,
+           token.line,
+           token.column);
+}
+
+char *ler_arquivo(const char *filename){
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+
+    char *buffer = (char *)malloc(size + 1);
+    if (buffer == NULL) {
+        fclose(file);
+        return NULL;
+    }
+
+    size_t bytes_read = fread(buffer, 1, size, file);
+    buffer[bytes_read] = '\0';
+
+    fclose(file);
+    return buffer;
+}
