@@ -1,0 +1,57 @@
+#ifndef LEXER_H
+#define LEXER_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+typedef enum {
+    //Identificadores e literais
+    TOKEN_ID,
+    TOKEN_NUM,
+
+    //Palavras reservadas
+    TOKEN_INT,
+    TOKEN_IF,
+
+    //Operadores
+    TOKEN_PLUS,
+    TOKEN_MINUS,
+    TOKEN_ASSIGN,
+
+    //Delimitadores
+    TOKEN_SEMICOLON,
+
+    //Fim de arquivo e erro
+    TOKEN_EOF,
+    TOKEN_ERROR
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    char lexema[100];
+    int line;
+    int column;
+} Token;
+
+typedef struct {
+    const char *src;
+    int pos;
+    int line;
+    int column;
+    char current_char;  
+} Lexer;
+
+void inicializar_lexer(Lexer *lexer, const char *source); //Inicializa o lexer com a fonte de entrada
+void andar_char(Lexer *lexer); //Avança para o próximo caractere
+char spoiler_prox_char(Lexer *lexer); //Olha o próximo caractere sem avançar
+void pular_espacos(Lexer *lexer); //Ignora espaços em branco
+Token cria_token(TokenType type, const char* lexema, int line, int column); //Cria um token
+Token indetificadores(Lexer *lexer); //Processa identificadores e palavras reservadas
+Token numeros(Lexer *lexer); //Processa números
+Token pegar_prox_token(Lexer *lexer); //Obtém o próximo token da fonte de entrada
+void print_token(Token token); //Imprime um token para depuração
+const char* token_para_string(TokenType type); //Converte um TokenType para string (depuração)
+char *ler_arquivo(const char *filename); //Lê o conteúdo de um arquivo e retorna como string
+
+#endif 
