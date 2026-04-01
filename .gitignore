@@ -1,0 +1,37 @@
+# Object files
+*.o
+
+# Libraries
+*.a
+*.so
+*.dylib
+
+# Folders
+lexer_analyzer/bin/
+
+# Executables
+lexer
+
+# Build artifacts
+bin/
+
+# Dependency files
+*.d
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*~
+
+# Temporary files
+*.tmp
+*.bak
+
+# Logs
+*.log
