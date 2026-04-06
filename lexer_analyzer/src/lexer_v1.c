@@ -131,6 +131,11 @@ Token pegar_prox_token(Lexer *lexer){
         if(lexer->current_char == '='){
             int start_line = lexer->line;
             int start_column = lexer->column;
+            if(spoiler_prox_char(lexer) == '='){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_EQ, "==", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_ASSIGN, "=", start_line, start_column);
         }
@@ -149,18 +154,33 @@ Token pegar_prox_token(Lexer *lexer){
         if(lexer->current_char == '<'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+            if(spoiler_prox_char(lexer) == '='){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_LTE, "<=", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_LT, "<", start_line, start_column);
         }
         if(lexer->current_char == '>'){
             int start_line = lexer->line;
             int start_column = lexer->column;  
+            if(spoiler_prox_char(lexer) == '='){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_GTE, ">=", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_GT, ">", start_line, start_column);
         }
         if(lexer->current_char == '!'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+            if(spoiler_prox_char(lexer) == '='){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_NEQ, "!=", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_NOT, "!", start_line, start_column);
         }
@@ -181,12 +201,22 @@ Token pegar_prox_token(Lexer *lexer){
         if(lexer->current_char == '&'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+            if(spoiler_prox_char(lexer) == '&'){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_AND, "&&", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_AMPERSAND, "&", start_line, start_column);
         }
         if(lexer->current_char == '|'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+            if(spoiler_prox_char(lexer) == '|'){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_OR, "||", start_line, start_column);
+            }
             andar_char(lexer);
             return cria_token(TOKEN_PIPE, "|", start_line, start_column);
         }
@@ -270,14 +300,21 @@ const char* token_para_string(TokenType type){
         case TOKEN_MULT: return "TOKEN_MULT";
         case TOKEN_DIV: return "TOKEN_DIV";
         case TOKEN_ASSIGN: return "TOKEN_ASSIGN";
-
         case TOKEN_LT: return "TOKEN_LT";
         case TOKEN_GT: return "TOKEN_GT";
         case TOKEN_NOT: return "TOKEN_NOT";
+
         case TOKEN_HASH: return "TOKEN_HASH";
         case TOKEN_DOT: return "TOKEN_DOT";
         case TOKEN_AMPERSAND: return "TOKEN_AMPERSAND";
         case TOKEN_PIPE: return "TOKEN_PIPE";
+
+        case TOKEN_EQ: return "TOKEN_EQ";
+        case TOKEN_NEQ: return "TOKEN_NEQ"; 
+        case TOKEN_LTE: return "TOKEN_LTE";
+        case TOKEN_GTE: return "TOKEN_GTE";
+        case TOKEN_AND: return "TOKEN_AND";
+        case TOKEN_OR: return "TOKEN_OR";
 
         case TOKEN_SEMICOLON: return "TOKEN_SEMICOLON";
         case TOKEN_COMMA: return "TOKEN_COMMA";
