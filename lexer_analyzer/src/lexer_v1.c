@@ -114,6 +114,8 @@ Token pegar_prox_token(Lexer *lexer){
         if(isdigit(lexer->current_char)){
             return numeros(lexer);
         }
+
+        //Operadores
         if(lexer->current_char == '+'){
             int start_line = lexer->line;
             int start_column = lexer->column;
@@ -132,12 +134,113 @@ Token pegar_prox_token(Lexer *lexer){
             andar_char(lexer);
             return cria_token(TOKEN_ASSIGN, "=", start_line, start_column);
         }
+        if(lexer->current_char == '*'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_MULT, "*", start_line, start_column);
+        }
+        if(lexer->current_char == '/'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_DIV, "/", start_line, start_column);
+        }
+        if(lexer->current_char == '<'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_LT, "<", start_line, start_column);
+        }
+        if(lexer->current_char == '>'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;  
+            andar_char(lexer);
+            return cria_token(TOKEN_GT, ">", start_line, start_column);
+        }
+        if(lexer->current_char == '!'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_NOT, "!", start_line, start_column);
+        }
+
+        //Caracteres especiais
+        if(lexer->current_char == '#'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_HASH, "#", start_line, start_column);
+        }
+        if(lexer->current_char == '.'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_DOT, ".", start_line, start_column);
+        }
+        if(lexer->current_char == '&'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_AMPERSAND, "&", start_line, start_column);
+        }
+        if(lexer->current_char == '|'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_PIPE, "|", start_line, start_column);
+        }
+
+        //Delimitadores
         if(lexer->current_char == ';'){
             int start_line = lexer->line;
             int start_column = lexer->column;
             andar_char(lexer);
             return cria_token(TOKEN_SEMICOLON, ";", start_line, start_column);
         }
+        if(lexer->current_char == ','){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_COMMA, ",", start_line, start_column);
+        }
+        if(lexer->current_char == '('){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_LPAREN, "(", start_line, start_column);
+        }
+        if(lexer->current_char == ')'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_RPAREN, ")", start_line, start_column);
+        }
+        if(lexer->current_char == '{'){
+            int start_line = lexer->line;   
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_LBRACE, "{", start_line, start_column);
+        }
+        if(lexer->current_char == '}'){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_RBRACE, "}", start_line, start_column);
+        }
+        if(lexer->current_char == '['){
+            int start_line = lexer->line;
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_LBRACKET, "[", start_line, start_column);
+        }
+        if(lexer->current_char == ']'){
+            int start_line = lexer->line;   
+            int start_column = lexer->column;
+            andar_char(lexer);
+            return cria_token(TOKEN_RBRACKET, "]", start_line, start_column);
+        }
+        if(lexer)
         {
             char error_lexema[2];
             int start_line = lexer->line;
@@ -158,12 +261,34 @@ const char* token_para_string(TokenType type){
     switch(type){
         case TOKEN_ID: return "TOKEN_ID";
         case TOKEN_NUM: return "TOKEN_NUM";
+
         case TOKEN_INT: return "TOKEN_INT";
         case TOKEN_IF: return "TOKEN_IF";
+
         case TOKEN_PLUS: return "TOKEN_PLUS";
         case TOKEN_MINUS: return "TOKEN_MINUS";
+        case TOKEN_MULT: return "TOKEN_MULT";
+        case TOKEN_DIV: return "TOKEN_DIV";
         case TOKEN_ASSIGN: return "TOKEN_ASSIGN";
+
+        case TOKEN_LT: return "TOKEN_LT";
+        case TOKEN_GT: return "TOKEN_GT";
+        case TOKEN_NOT: return "TOKEN_NOT";
+        case TOKEN_HASH: return "TOKEN_HASH";
+        case TOKEN_DOT: return "TOKEN_DOT";
+        case TOKEN_AMPERSAND: return "TOKEN_AMPERSAND";
+        case TOKEN_PIPE: return "TOKEN_PIPE";
+
         case TOKEN_SEMICOLON: return "TOKEN_SEMICOLON";
+        case TOKEN_COMMA: return "TOKEN_COMMA";
+
+        case TOKEN_LPAREN: return "TOKEN_LPAREN";
+        case TOKEN_RPAREN: return "TOKEN_RPAREN";
+        case TOKEN_LBRACE: return "TOKEN_LBRACE";
+        case TOKEN_RBRACE: return "TOKEN_RBRACE";
+        case TOKEN_LBRACKET: return "TOKEN_LBRACKET";
+        case TOKEN_RBRACKET: return "TOKEN_RBRACKET";
+
         case TOKEN_EOF: return "TOKEN_EOF";
         case TOKEN_ERROR: return "TOKEN_ERROR";
         default: return "TOKEN_UNKNOWN";
