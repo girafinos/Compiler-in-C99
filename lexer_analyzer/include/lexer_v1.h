@@ -15,12 +15,30 @@ typedef enum {
     TOKEN_IF,
 
     //Operadores
-    TOKEN_PLUS,
-    TOKEN_MINUS,
-    TOKEN_ASSIGN,
+    TOKEN_PLUS, //+
+    TOKEN_MINUS, //-
+    TOKEN_ASSIGN, //=
+    TOKEN_MULT, //*
+    TOKEN_DIV, // /
+
+    TOKEN_LT, //<
+    TOKEN_GT, //>
+    TOKEN_NOT, //!
+    TOKEN_HASH, //#
+    TOKEN_DOT, //.
+    TOKEN_AMPERSAND, //&
+    TOKEN_PIPE, //|
 
     //Delimitadores
-    TOKEN_SEMICOLON,
+    TOKEN_SEMICOLON, //;
+    TOKEN_COMMA, //,
+
+    TOKEN_LPAREN, //(
+    TOKEN_RPAREN, //)
+    TOKEN_LBRACE, //{
+    TOKEN_RBRACE, //}
+    TOKEN_LBRACKET, //[
+    TOKEN_RBRACKET, //],
 
     //Fim de arquivo e erro
     TOKEN_EOF,
