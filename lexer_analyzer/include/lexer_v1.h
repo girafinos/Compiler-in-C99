@@ -12,7 +12,20 @@ typedef enum {
 
     //Palavras reservadas
     TOKEN_INT,
+    TOKEN_CHAR,
+    TOKEN_CONST,
+    TOKEN_VOID,
     TOKEN_IF,
+    TOKEN_ELSE,
+    TOKEN_WHILE,
+    TOKEN_RETURN,
+    TOKEN_SWITCH,
+    TOKEN_CASE,
+    TOKEN_DEFAULT,
+    TOKEN_TYPEDEF,
+    TOKEN_STRUCT,
+    TOKEN_ENUM,
+    TOKEN_BREAK,
 
     //Operadores
     TOKEN_PLUS,        //+
@@ -74,7 +87,8 @@ void andar_char(Lexer *lexer); //Avança para o próximo caractere
 char spoiler_prox_char(Lexer *lexer); //Olha o próximo caractere sem avançar
 void pular_espacos(Lexer *lexer); //Ignora espaços em branco
 Token cria_token(TokenType type, const char* lexema, int line, int column); //Cria um token
-Token indetificadores(Lexer *lexer); //Processa identificadores e palavras reservadas
+TokenType palavra_chave_ou_id(const char *lexema); //Determina se um lexema é uma palavra reservada ou um identificador
+Token identificadores(Lexer *lexer); //Processa identificadores e palavras reservadas
 Token numeros(Lexer *lexer); //Processa números
 Token pegar_prox_token(Lexer *lexer); //Obtém o próximo token da fonte de entrada
 void print_token(Token token); //Imprime um token para depuração
