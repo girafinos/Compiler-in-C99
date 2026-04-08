@@ -94,5 +94,6 @@ Token pegar_prox_token(Lexer *lexer); //Obtém o próximo token da fonte de entr
 void print_token(Token token); //Imprime um token para depuração
 const char* token_para_string(TokenType type); //Converte um TokenType para string (depuração)
 char *ler_arquivo(const char *filename); //Lê o conteúdo de um arquivo e retorna como string
-
+void pular_comentario_linha(Lexer *lexer); //Ignora linhas de comentário
+void pular_comentario_bloco(Lexer *lexer); //Ignora blocos
 #endif 
