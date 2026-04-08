@@ -160,6 +160,19 @@ Token pegar_prox_token(Lexer *lexer){
             return cria_token(TOKEN_MULT, "*", start_line, start_column);
         }
         if(lexer->current_char == '/'){
+            if(spoiler_prox_char(lexer) == '/'){
+                andar_char(lexer);
+                andar_char(lexer);
+                pular_comentario_linha(lexer);
+                continue;
+            }
+            if(spoiler_prox_char(lexer) == '*'){
+                andar_char(lexer);
+                andar_char(lexer);
+                pular_comentario_bloco(lexer);
+                continue;
+            }
+
             int start_line = lexer->line;
             int start_column = lexer->column;
             andar_char(lexer);
@@ -300,6 +313,23 @@ Token pegar_prox_token(Lexer *lexer){
     }
     return cria_token(TOKEN_EOF, "EOF", lexer->line, lexer->column);
 }
+
+void pular_comentario_linha(Lexer *lexer){
+    while(lexer->current_char != '\0' && lexer->current_char != '\n'){
+        andar_char(lexer);  
+    }
+}   
+
+void pular_comentario_bloco(Lexer *lexer){
+    while(lexer->current_char != '\0'){
+        if(lexer->current_char == '*' && spoiler_prox_char(lexer) == '/'){
+            andar_char(lexer);
+            andar_char(lexer);
+            break;
+        }
+        andar_char(lexer);
+    }
+} 
 
 const char* token_para_string(TokenType type){
     switch(type){
