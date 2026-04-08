@@ -62,7 +62,27 @@ Token cria_token(TokenType type, const char* lexema, int line, int column){
     return token;
 }
 
-Token indetificadores(Lexer *lexer){
+TokenType palavra_chave_ou_id(const char *lexema){
+    if(strcmp(lexema, "int") == 0) return TOKEN_INT;
+    if(strcmp(lexema, "char") == 0) return TOKEN_CHAR;
+    if(strcmp(lexema, "const") == 0) return TOKEN_CONST;
+    if(strcmp(lexema, "void") == 0) return TOKEN_VOID;
+    if(strcmp(lexema, "if") == 0) return TOKEN_IF;
+    if(strcmp(lexema, "else") == 0) return TOKEN_ELSE;
+    if(strcmp(lexema, "while") == 0) return TOKEN_WHILE;
+    if(strcmp(lexema, "return") == 0) return TOKEN_RETURN;
+    if(strcmp(lexema, "switch") == 0) return TOKEN_SWITCH;
+    if(strcmp(lexema, "case") == 0) return TOKEN_CASE;
+    if(strcmp(lexema, "default") == 0) return TOKEN_DEFAULT;
+    if(strcmp(lexema, "typedef") == 0) return TOKEN_TYPEDEF;
+    if(strcmp(lexema, "struct") == 0) return TOKEN_STRUCT;
+    if(strcmp(lexema, "enum") == 0) return TOKEN_ENUM;
+    if(strcmp(lexema, "break") == 0) return TOKEN_BREAK;
+
+    return TOKEN_ID; // Se não for uma palavra reservada, é um identificador
+}
+
+Token identificadores(Lexer *lexer){
     char buffer[100];
     int i = 0;
     int start_line = lexer->line;
@@ -76,13 +96,7 @@ Token indetificadores(Lexer *lexer){
 
     buffer[i] = '\0';
 
-    if(strcmp(buffer, "int") == 0){
-        return cria_token(TOKEN_INT, buffer, start_line, start_column);
-    }
-    if(strcmp(buffer, "if") == 0){
-        return cria_token(TOKEN_IF, buffer, start_line, start_column);
-    }
-    return cria_token(TOKEN_ID, buffer, start_line, start_column);
+    return cria_token(palavra_chave_ou_id(buffer), buffer, start_line, start_column);
 }
 
 Token numeros(Lexer *lexer){
@@ -109,7 +123,7 @@ Token pegar_prox_token(Lexer *lexer){
             continue;
         }
         if(isalpha(lexer->current_char) || lexer->current_char == '_'){
-            return indetificadores(lexer);
+            return identificadores(lexer);
         }
         if(isdigit(lexer->current_char)){
             return numeros(lexer);
@@ -293,7 +307,20 @@ const char* token_para_string(TokenType type){
         case TOKEN_NUM: return "TOKEN_NUM";
 
         case TOKEN_INT: return "TOKEN_INT";
+        case TOKEN_CHAR: return "TOKEN_CHAR";
+        case TOKEN_CONST: return "TOKEN_CONST";
+        case TOKEN_VOID: return "TOKEN_VOID";
         case TOKEN_IF: return "TOKEN_IF";
+        case TOKEN_ELSE: return "TOKEN_ELSE";
+        case TOKEN_WHILE: return "TOKEN_WHILE";
+        case TOKEN_RETURN: return "TOKEN_RETURN";
+        case TOKEN_SWITCH: return "TOKEN_SWITCH";
+        case TOKEN_CASE: return "TOKEN_CASE";
+        case TOKEN_DEFAULT: return "TOKEN_DEFAULT";
+        case TOKEN_TYPEDEF: return "TOKEN_TYPEDEF";
+        case TOKEN_STRUCT: return "TOKEN_STRUCT";
+        case TOKEN_ENUM: return "TOKEN_ENUM";
+        case TOKEN_BREAK: return "TOKEN_BREAK";
 
         case TOKEN_PLUS: return "TOKEN_PLUS";
         case TOKEN_MINUS: return "TOKEN_MINUS";
