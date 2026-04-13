@@ -8,7 +8,8 @@
 typedef enum {
     //Identificadores e literais
     TOKEN_ID,
-    TOKEN_NUM,
+    TOKEN_NUM,  
+    TOKEN_STRING,
 
     //Palavras reservadas
     TOKEN_INT,
@@ -90,6 +91,7 @@ Token cria_token(TokenType type, const char* lexema, int line, int column); //Cr
 TokenType palavra_chave_ou_id(const char *lexema); //Determina se um lexema é uma palavra reservada ou um identificador
 Token identificadores(Lexer *lexer); //Processa identificadores e palavras reservadas
 Token numeros(Lexer *lexer); //Processa números
+Token string_literal(Lexer *lexer); //Processa literais de string
 Token pegar_prox_token(Lexer *lexer); //Obtém o próximo token da fonte de entrada
 void print_token(Token token); //Imprime um token para depuração
 const char* token_para_string(TokenType type); //Converte um TokenType para string (depuração)
