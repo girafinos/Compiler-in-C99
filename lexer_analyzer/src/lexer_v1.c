@@ -116,6 +116,40 @@ Token numeros(Lexer *lexer){
     return cria_token(TOKEN_NUM, buffer, start_line, start_column);
 }
 
+Token string_literal(Lexer *lexer){
+    char buffer[256];
+    int i = 0;
+    int start_line = lexer->line;
+    int start_column = lexer->column;
+
+    andar_char(lexer); 
+
+    while(lexer->current_char != '\0' && lexer->current_char != '"' && i<255){
+        if(lexer->current_char == '\\'){
+            buffer[i++] = lexer->current_char;
+            andar_char(lexer);
+
+            if(lexer->current_char != '\0'){
+                buffer[i++] = lexer->current_char;
+                andar_char(lexer);
+            }
+            continue;
+        }
+
+        buffer[i++] = lexer->current_char;
+        andar_char(lexer);
+    }
+
+    buffer[i] = '\0';
+
+    if(lexer->current_char == '"'){
+        andar_char(lexer); 
+        return cria_token(TOKEN_STRING, buffer, start_line, start_column);
+    } 
+    
+    return cria_token(TOKEN_ERROR, buffer, start_line, start_column);
+}
+
 Token pegar_prox_token(Lexer *lexer){
     while(lexer->current_char != '\0'){
         if(isspace(lexer->current_char)){
@@ -127,6 +161,9 @@ Token pegar_prox_token(Lexer *lexer){
         }
         if(isdigit(lexer->current_char)){
             return numeros(lexer);
+        }
+        if(lexer->current_char == '"'){
+            return string_literal(lexer);
         }
 
         //Operadores
@@ -297,7 +334,7 @@ Token pegar_prox_token(Lexer *lexer){
             andar_char(lexer);
             return cria_token(TOKEN_RBRACKET, "]", start_line, start_column);
         }
-        if(lexer)
+        else
         {
             char error_lexema[2];
             int start_line = lexer->line;
@@ -335,6 +372,7 @@ const char* token_para_string(TokenType type){
     switch(type){
         case TOKEN_ID: return "TOKEN_ID";
         case TOKEN_NUM: return "TOKEN_NUM";
+        case TOKEN_STRING: return "TOKEN_STRING";
 
         case TOKEN_INT: return "TOKEN_INT";
         case TOKEN_CHAR: return "TOKEN_CHAR";
