@@ -150,6 +150,43 @@ Token string_literal(Lexer *lexer){
     return cria_token(TOKEN_ERROR, buffer, start_line, start_column);
 }
 
+Token char_literal(Lexer *lexer) {
+    char buffer[10];
+    int i = 0;
+    int start_line = lexer->line;
+    int start_column = lexer->column;
+
+    andar_char(lexer); // pula a aspas simples inicial '
+
+    if (lexer->current_char == '\0' || lexer->current_char == '\n') {
+        return cria_token(TOKEN_ERROR, "Invalid char literal", start_line, start_column);
+    }
+
+    if (lexer->current_char == '\\') {
+        buffer[i++] = lexer->current_char;
+        andar_char(lexer);
+
+        if (lexer->current_char == '\0' || lexer->current_char == '\n') {
+            return cria_token(TOKEN_ERROR, "Invalid char literal", start_line, start_column);
+        }
+
+        buffer[i++] = lexer->current_char;
+        andar_char(lexer);
+    } else {
+        buffer[i++] = lexer->current_char;
+        andar_char(lexer);
+    }
+
+    buffer[i] = '\0';
+
+    if (lexer->current_char == '\'') {
+        andar_char(lexer); // pula a aspas simples final '
+        return cria_token(TOKEN_CHAR_LITERAL, buffer, start_line, start_column);
+    }
+
+    return cria_token(TOKEN_ERROR, "Invalid char literal", start_line, start_column);
+}
+
 Token pegar_prox_token(Lexer *lexer){
     while(lexer->current_char != '\0'){
         if(isspace(lexer->current_char)){
@@ -164,6 +201,9 @@ Token pegar_prox_token(Lexer *lexer){
         }
         if(lexer->current_char == '"'){
             return string_literal(lexer);
+        }
+        if (lexer->current_char == '\'') {
+        return char_literal(lexer);
         }
 
         //Operadores
@@ -373,6 +413,7 @@ const char* token_para_string(TokenType type){
         case TOKEN_ID: return "TOKEN_ID";
         case TOKEN_NUM: return "TOKEN_NUM";
         case TOKEN_STRING: return "TOKEN_STRING";
+        case TOKEN_CHAR_LITERAL: return "TOKEN_CHAR_LITERAL";
 
         case TOKEN_INT: return "TOKEN_INT";
         case TOKEN_CHAR: return "TOKEN_CHAR";
