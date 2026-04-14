@@ -10,6 +10,7 @@ typedef enum {
     TOKEN_ID,
     TOKEN_NUM,  
     TOKEN_STRING,
+    TOKEN_CHAR_LITERAL,
 
     //Palavras reservadas
     TOKEN_INT,
@@ -93,6 +94,7 @@ Token identificadores(Lexer *lexer); //Processa identificadores e palavras reser
 Token numeros(Lexer *lexer); //Processa números
 Token string_literal(Lexer *lexer); //Processa literais de string
 Token pegar_prox_token(Lexer *lexer); //Obtém o próximo token da fonte de entrada
+Token char_literal(Lexer *lexer); //Processa literais de caractere
 void print_token(Token token); //Imprime um token para depuração
 const char* token_para_string(TokenType type); //Converte um TokenType para string (depuração)
 char *ler_arquivo(const char *filename); //Lê o conteúdo de um arquivo e retorna como string
