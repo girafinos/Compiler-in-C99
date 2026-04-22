@@ -17,11 +17,9 @@ int main(int argc, char *argv[]) {
     inicializar_lexer(&lexer, source);
     inicializar_parser(&parser, &lexer);
 
-    come(&parser, TOKEN_INT);
-    come(&parser, TOKEN_ID);
-    come(&parser, TOKEN_SEMICOLON);
+    analisar_programa(&parser);
 
-    printf("Teste do parser concluido com sucesso.\n");
+    printf("Análise sintática concluída com sucesso!\n");
 
     free(source);
     return 0;
