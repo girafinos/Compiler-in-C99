@@ -34,7 +34,7 @@ void analisar_programa(Parser *parser){
 }
 
 void analisar_lista_de_comandos(Parser *parser){
-    while(parser->current_token.type != TOKEN_EOF){
+    while(parser->current_token.type != TOKEN_EOF && parser->current_token.type != TOKEN_RBRACE){
         analisar_comando(parser);
     }
 }
@@ -44,6 +44,10 @@ void analisar_comando(Parser *parser){
         analisar_declaracoes(parser);
     } else if(parser->current_token.type == TOKEN_ID){
         analisar_atribuições(parser);
+    } else if(parser->current_token.type == TOKEN_LBRACE){
+        analisar_bloco(parser);
+    } else if(parser->current_token.type == TOKEN_IF){
+        analisar_if(parser);
     } else {
         erro_de_sintaxe(parser, "Esperado declaração de variável ou atribuição");
     }
@@ -52,6 +56,10 @@ void analisar_comando(Parser *parser){
 void analisar_declaracoes(Parser *parser){
     consumir_token(parser, TOKEN_INT);
     consumir_token(parser, TOKEN_ID);
+    if(parser->current_token.type == TOKEN_ASSIGN){  
+        consumir_token(parser, TOKEN_ASSIGN);
+        analisar_expressao(parser);
+    }
     consumir_token(parser, TOKEN_SEMICOLON);
 }
 
@@ -77,6 +85,15 @@ void analisar_expressao(Parser *parser){
 
 void analisar_termo(Parser *parser){
     analisar_fator(parser);
+
+    while(parser->current_token.type == TOKEN_MULT || parser->current_token.type == TOKEN_DIV) {
+        if(parser->current_token.type == TOKEN_MULT){
+            consumir_token(parser, TOKEN_MULT);
+        } else {
+            consumir_token(parser, TOKEN_DIV);
+        }
+        analisar_fator(parser);
+    }
 }
 
 void analisar_fator(Parser *parser){
@@ -90,5 +107,24 @@ void analisar_fator(Parser *parser){
         consumir_token(parser, TOKEN_RPAREN);
     } else {
         erro_de_sintaxe(parser, "Esperado identificador, número ou expressão entre parênteses");
+    }   
+}
+
+void analisar_bloco(Parser *parser){
+    consumir_token(parser, TOKEN_LBRACE);
+    analisar_lista_de_comandos(parser);
+    consumir_token(parser, TOKEN_RBRACE);
+}
+
+void analisar_if(Parser *parser){
+    consumir_token(parser, TOKEN_IF);
+    consumir_token(parser, TOKEN_LPAREN);
+    analisar_expressao(parser);
+    consumir_token(parser, TOKEN_RPAREN);
+    analisar_comando(parser);
+
+    if(parser->current_token.type == TOKEN_ELSE){
+        consumir_token(parser, TOKEN_ELSE);
+        analisar_comando(parser);
     }
 }
