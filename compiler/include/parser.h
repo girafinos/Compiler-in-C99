@@ -18,8 +18,11 @@ void analisar_lista_de_comandos(Parser *parser);
 void analisar_comando(Parser *parser);
 void analisar_declaracoes(Parser *parser);
 void analisar_atribuições(Parser *parser);
+void analisar_bloco(Parser *parser);
+
 void analisar_expressao(Parser *parser);
 void analisar_termo(Parser *parser);
 void analisar_fator(Parser *parser);
+void analisar_if(Parser *parser);
 
 #endif // PARSER_H
