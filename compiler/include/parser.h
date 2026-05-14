@@ -20,9 +20,14 @@ void analisar_declaracoes(Parser *parser);
 void analisar_atribuições(Parser *parser);
 void analisar_bloco(Parser *parser);
 
+void analisar_condicao(Parser *parser);
+void analisar_operador_relacional(Parser *parser);
+void analisar_condicao_relacional(Parser *parser);
 void analisar_expressao(Parser *parser);
 void analisar_termo(Parser *parser);
 void analisar_fator(Parser *parser);
 void analisar_if(Parser *parser);
+void analisar_while(Parser *parser);
+void analisar_return(Parser *parser);
 
 #endif // PARSER_H
