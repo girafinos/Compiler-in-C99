@@ -69,7 +69,8 @@ TokenType palavra_chave_ou_id(const char *lexema){
     if(strcmp(lexema, "void") == 0) return TOKEN_VOID;
     if(strcmp(lexema, "if") == 0) return TOKEN_IF;
     if(strcmp(lexema, "else") == 0) return TOKEN_ELSE;
-    if(strcmp(lexema, "while") == 0) return TOKEN_WHILE;
+    if(strcmp(lexema, "while") == 0) return TOKEN_WHILE;    
+    if(strcmp(lexema, "for") == 0) return TOKEN_FOR;
     if(strcmp(lexema, "return") == 0) return TOKEN_RETURN;
     if(strcmp(lexema, "switch") == 0) return TOKEN_SWITCH;
     if(strcmp(lexema, "case") == 0) return TOKEN_CASE;
@@ -210,12 +211,26 @@ Token pegar_prox_token(Lexer *lexer){
         if(lexer->current_char == '+'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+
+            if(spoiler_prox_char(lexer) == '+'){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_INCREMENT, "++", start_line, start_column);
+            }
+
             andar_char(lexer);
             return cria_token(TOKEN_PLUS, "+", start_line, start_column);
         }
         if(lexer->current_char == '-'){
             int start_line = lexer->line;
             int start_column = lexer->column;
+
+            if(spoiler_prox_char(lexer) == '-'){
+                andar_char(lexer);
+                andar_char(lexer);
+                return cria_token(TOKEN_DECREMENT, "--", start_line, start_column);
+            }
+            
             andar_char(lexer);
             return cria_token(TOKEN_MINUS, "-", start_line, start_column); 
         }
@@ -422,6 +437,7 @@ const char* token_para_string(TokenType type){
         case TOKEN_IF: return "TOKEN_IF";
         case TOKEN_ELSE: return "TOKEN_ELSE";
         case TOKEN_WHILE: return "TOKEN_WHILE";
+        case TOKEN_FOR: return "TOKEN_FOR";
         case TOKEN_RETURN: return "TOKEN_RETURN";
         case TOKEN_SWITCH: return "TOKEN_SWITCH";
         case TOKEN_CASE: return "TOKEN_CASE";
@@ -451,6 +467,8 @@ const char* token_para_string(TokenType type){
         case TOKEN_GTE: return "TOKEN_GTE";
         case TOKEN_AND: return "TOKEN_AND";
         case TOKEN_OR: return "TOKEN_OR";
+        case TOKEN_INCREMENT: return "TOKEN_INCREMENT";
+        case TOKEN_DECREMENT: return "TOKEN_DECREMENT";
 
         case TOKEN_SEMICOLON: return "TOKEN_SEMICOLON";
         case TOKEN_COMMA: return "TOKEN_COMMA";
