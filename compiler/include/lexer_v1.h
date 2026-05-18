@@ -20,6 +20,7 @@ typedef enum {
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,
+    TOKEN_FOR,
     TOKEN_RETURN,
     TOKEN_SWITCH,
     TOKEN_CASE,
@@ -52,6 +53,8 @@ typedef enum {
     TOKEN_GTE,         // >=
     TOKEN_AND,         // &&
     TOKEN_OR,          // ||
+    TOKEN_INCREMENT,    //++
+    TOKEN_DECREMENT,    //--
 
     //Delimitadores
     TOKEN_SEMICOLON,   //;
