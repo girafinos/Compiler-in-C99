@@ -18,9 +18,10 @@ void avancar_token(Parser *parser);
 void erro_de_sintaxe(Parser *parser, const char *mensagem);
 void consumir_token(Parser *parser, TokenType tipo_esperado);
 void sincronizar_parser(Parser *parser);
+void sincronizar_ate(Parser *parser, TokenType token);
+void mostrar_linha_erro(Parser *parser);
 
 // =========== Análise Geral do Programa ==========
-
 
 void analisar_programa(Parser *parser);
 
@@ -53,6 +54,8 @@ void analisar_continue(Parser *parser);
 
 void analisar_tipo(Parser *parser);
 void analisar_incremento_decremento(Parser *parser);
+int token_eh_operador_relacional(TokenType type);
+int token_eh_tipo(TokenType type);
 
 // =========== Condições ==========
 
