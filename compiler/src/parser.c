@@ -37,6 +37,9 @@ void erro_de_sintaxe(Parser *parser, const char *mensagem){
 
     printf("Lexema   : \"%s\"\n",
            parser->current_token.lexema);
+    
+    printf("\nTrecho:\n");
+    mostrar_linha_erro(parser);
 
     printf("====================================\n\n");
 }
@@ -79,6 +82,58 @@ void sincronizar_parser(Parser *parser){
     }
 
     parser->em_recuperacao = 0;
+}
+
+void sincronizar_ate(Parser *parser, TokenType token){
+
+    while(parser->current_token.type != TOKEN_EOF){
+
+        if(parser->current_token.type == token){
+            return;
+        }
+
+        avancar_token(parser);
+    }
+}
+
+void mostrar_linha_erro(Parser *parser){
+
+    char *source = parser->lexer->src;
+
+    int linha_atual = 1;
+    int i = 0;
+
+    while(source[i] != '\0'){
+
+        if(linha_atual == parser->current_token.line){
+
+            while(source[i] != '\n' &&
+                  source[i] != '\0'){
+
+                printf("%c", source[i]);
+                i++;
+            }
+
+            printf("\n");
+
+            for(int j = 1;
+                j < parser->current_token.column;
+                j++){
+
+                printf(" ");
+            }
+
+            printf("^\n");
+
+            return;
+        }
+
+        if(source[i] == '\n'){
+            linha_atual++;
+        }
+
+        i++;
+    }
 }
 
 void analisar_programa(Parser *parser){
@@ -169,8 +224,12 @@ void analisar_comando(Parser *parser){
     } else if(parser->current_token.type == TOKEN_CONTINUE){
         analisar_continue(parser);
 
-    } else {
-        erro_de_sintaxe(parser, "Esperado declaração de variável ou atribuição");
+    }else{
+        erro_de_sintaxe(
+            parser,
+            "Comando inválido"
+        );
+        sincronizar_parser(parser);
     }
 }
 
@@ -187,6 +246,14 @@ void analisar_comando_iniciado_por_id(Parser *parser){
 
         if(parser->current_token.type != TOKEN_RPAREN){
             analisar_lista_de_argumentos(parser);
+
+            if(parser->current_token.type != TOKEN_RPAREN){
+                erro_de_sintaxe(
+                    parser,
+                    "Esperado ')' ao final da chamada de função"
+                );
+                sincronizar_ate(parser, TOKEN_RPAREN);
+            }
         }
 
         consumir_token(parser, TOKEN_RPAREN);
@@ -326,23 +393,16 @@ void analisar_continue(Parser *parser){
 }
 
 void analisar_tipo(Parser *parser){
-    if(parser->current_token.type == TOKEN_INT){
 
-        consumir_token(parser, TOKEN_INT);
+    if(token_eh_tipo(parser->current_token.type)){
 
-    } else if(parser->current_token.type == TOKEN_CHAR){
-
-        consumir_token(parser, TOKEN_CHAR);
-
-    } else if(parser->current_token.type == TOKEN_VOID){
-
-        consumir_token(parser, TOKEN_VOID);
+        avancar_token(parser);
 
     } else {
+
         erro_de_sintaxe(parser, "Tipo esperado");
     }
 }
-
 
 void analisar_incremento_decremento(Parser *parser){
     if(parser->current_token.type == TOKEN_INCREMENT){
@@ -356,6 +416,23 @@ void analisar_incremento_decremento(Parser *parser){
     } else {
         erro_de_sintaxe(parser, "incremento ou decremento esperado");
     }
+}
+
+int token_eh_operador_relacional(TokenType type){
+
+    return type == TOKEN_LT  ||
+           type == TOKEN_GT  ||
+           type == TOKEN_LTE ||
+           type == TOKEN_GTE ||
+           type == TOKEN_EQ  ||
+           type == TOKEN_NEQ;
+}
+
+int token_eh_tipo(TokenType type){
+
+    return type == TOKEN_INT  ||
+           type == TOKEN_CHAR ||
+           type == TOKEN_VOID;
 }
 
 void analisar_condicao(Parser *parser){
@@ -390,32 +467,17 @@ void analisar_condicao_relacional(Parser *parser) {
 }
 
 void analisar_operador_relacional(Parser *parser){
-    if(parser->current_token.type == TOKEN_LT){
 
-        consumir_token(parser, TOKEN_LT);
+    if(token_eh_operador_relacional(parser->current_token.type)){
 
-    } else if(parser->current_token.type == TOKEN_GT){
-
-        consumir_token(parser, TOKEN_GT);
-
-    } else if(parser->current_token.type == TOKEN_LTE){
-
-        consumir_token(parser, TOKEN_LTE);
-
-    } else if(parser->current_token.type == TOKEN_GTE){
-
-        consumir_token(parser, TOKEN_GTE);
-
-    } else if(parser->current_token.type == TOKEN_EQ){
-
-        consumir_token(parser, TOKEN_EQ);
-
-    } else if(parser->current_token.type == TOKEN_NEQ){
-
-        consumir_token(parser, TOKEN_NEQ);
+        avancar_token(parser);
 
     } else {
-        erro_de_sintaxe(parser, "operador relacional esperado");
+
+        erro_de_sintaxe(
+            parser,
+            "Operador relacional esperado"
+        );
     }
 }
 
@@ -520,19 +582,54 @@ void analisar_fator(Parser *parser) {
 
     } else if(parser->current_token.type == TOKEN_LPAREN){
         consumir_token(parser, TOKEN_LPAREN);
-        analisar_expressao(parser);
+        if(parser->current_token.type == TOKEN_RPAREN){
+            erro_de_sintaxe(
+                parser,
+                "Expressão vazia entre parênteses"
+            );
+        }else{
+            analisar_expressao(parser);
+        }
+        if(parser->current_token.type != TOKEN_RPAREN){
+
+            erro_de_sintaxe(
+                parser,
+                "Esperado ')' ao final da expressão"
+            );
+
+            sincronizar_ate(parser, TOKEN_RPAREN);
+        }
         consumir_token(parser, TOKEN_RPAREN);
 
-    } else {
-        erro_de_sintaxe(parser, "fator invalido");
+    }else{
+    erro_de_sintaxe(
+        parser,
+        "Fator inválido na expressão"
+    );
+    avancar_token(parser);
     }
 }
 
 void analisar_lista_de_argumentos(Parser *parser){
+
     analisar_expressao(parser);
 
     while(parser->current_token.type == TOKEN_COMMA){
+
         consumir_token(parser, TOKEN_COMMA);
+
+        if(parser->current_token.type == TOKEN_RPAREN){
+
+            erro_de_sintaxe(
+                parser,
+                "Esperada expressão após vírgula"
+            );
+
+            sincronizar_ate(parser, TOKEN_RPAREN);
+
+            return;
+        }
+
         analisar_expressao(parser);
     }
 }
