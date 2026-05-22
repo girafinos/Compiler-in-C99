@@ -23,16 +23,41 @@ int main(int argc, char *argv[]) {
 
     if(parser.quantidade_erros == 0){
 
-        printf("Análise sintática concluída com sucesso.\n");
+        printf(GREEN
+            "====================================\n"
+            RESET);
+
+        printf(GREEN
+            "ANÁLISE SINTÁTICA CONCLUÍDA\n"
+            RESET);
+
+        printf(GREEN
+            "Nenhum erro encontrado.\n"
+            RESET);
+
+        printf(GREEN
+            "====================================\n"
+            RESET);
 
     } else {
 
-        printf(
-            "Análise sintática concluída com %d erro(s).\n",
-            parser.quantidade_erros
-        );
-    }
+        printf(RED
+            "====================================\n"
+            RESET);
 
+        printf(RED
+            "ANÁLISE SINTÁTICA FINALIZADA\n"
+            RESET);
+
+        printf(RED
+            "Erros encontrados: %d\n",
+            parser.quantidade_erros);
+
+        printf(RED
+            "====================================\n"
+            RESET);
+    }
+    
     free(source);
     return 0;
 }

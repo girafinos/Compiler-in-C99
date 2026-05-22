@@ -11,7 +11,8 @@ void avancar_token(Parser *parser) {
     parser->current_token = pegar_prox_token(parser->lexer);
 }
 
-void erro_de_sintaxe(Parser *parser, const char *mensagem){
+void erro_de_sintaxe(Parser *parser,
+                     const char *mensagem){
 
     if(parser->em_recuperacao){
         return;
@@ -21,27 +22,42 @@ void erro_de_sintaxe(Parser *parser, const char *mensagem){
 
     parser->quantidade_erros++;
 
-    printf("\n====================================\n");
-    printf("Erro sintático #%d\n", parser->quantidade_erros);
-    printf("====================================\n");
+    printf("\n");
 
-    printf("Mensagem : %s\n", mensagem);
+    printf(RED
+           "[ ERRO SINTÁTICO #%d ]\n\n"
+           RESET,
+           parser->quantidade_erros);
 
-    printf("Linha    : %d\n", parser->current_token.line);
-    printf("Coluna   : %d\n", parser->current_token.column);
+    printf(YELLOW "Mensagem:\n" RESET);
+    printf("  %s\n\n", mensagem);
 
-    printf("\nToken encontrado:\n");
+    printf(YELLOW "Localização:\n" RESET);
 
-    printf("Tipo     : %s\n",
-           token_para_string(parser->current_token.type));
+    printf("  Linha  : %d\n",
+           parser->current_token.line);
 
-    printf("Lexema   : \"%s\"\n",
+    printf("  Coluna : %d\n\n",
+           parser->current_token.column);
+
+    printf(YELLOW "Token encontrado:\n" RESET);
+
+    printf("  Tipo    : %s\n",
+           token_para_string(
+               parser->current_token.type
+           ));
+
+    printf("  Símbolo : %s\n",
+           token_para_simbolo(
+               parser->current_token.type
+           ));
+
+    printf("  Lexema  : \"%s\"\n\n",
            parser->current_token.lexema);
-    
-    printf("\nTrecho:\n");
-    mostrar_linha_erro(parser);
 
-    printf("====================================\n\n");
+    printf(YELLOW "Trecho:\n" RESET);
+
+    mostrar_linha_erro(parser);
 }
 
 void consumir_token(Parser *parser, TokenType tipo_esperado){
@@ -107,6 +123,9 @@ void mostrar_linha_erro(Parser *parser){
 
         if(linha_atual == parser->current_token.line){
 
+            printf(CYAN "%4d | " RESET,
+                   linha_atual);
+
             while(source[i] != '\n' &&
                   source[i] != '\0'){
 
@@ -116,6 +135,8 @@ void mostrar_linha_erro(Parser *parser){
 
             printf("\n");
 
+            printf("       ");
+
             for(int j = 1;
                 j < parser->current_token.column;
                 j++){
@@ -123,7 +144,7 @@ void mostrar_linha_erro(Parser *parser){
                 printf(" ");
             }
 
-            printf("^\n");
+            printf(RED "^\n" RESET);
 
             return;
         }
@@ -133,6 +154,65 @@ void mostrar_linha_erro(Parser *parser){
         }
 
         i++;
+    }
+}
+
+const char *token_para_simbolo(TokenType type){
+
+    switch(type){
+
+        case TOKEN_INT:         return "int";
+        case TOKEN_CHAR:        return "char";
+        case TOKEN_VOID:        return "void";
+
+        case TOKEN_IF:          return "if";
+        case TOKEN_ELSE:        return "else";
+        case TOKEN_WHILE:       return "while";
+        case TOKEN_FOR:         return "for";
+        case TOKEN_RETURN:      return "return";
+        case TOKEN_BREAK:       return "break";
+        case TOKEN_CONTINUE:    return "continue";
+
+        case TOKEN_PLUS:        return "+";
+        case TOKEN_MINUS:       return "-";
+        case TOKEN_MULT:        return "*";
+        case TOKEN_DIV:         return "/";
+
+        case TOKEN_ASSIGN:      return "=";
+
+        case TOKEN_EQ:          return "==";
+        case TOKEN_NEQ:         return "!=";
+
+        case TOKEN_LT:          return "<";
+        case TOKEN_GT:          return ">";
+        case TOKEN_LTE:         return "<=";
+        case TOKEN_GTE:         return ">=";
+
+        case TOKEN_AND:         return "&&";
+        case TOKEN_OR:          return "||";
+        case TOKEN_NOT:         return "!";
+
+        case TOKEN_INCREMENT:   return "++";
+        case TOKEN_DECREMENT:   return "--";
+
+        case TOKEN_LPAREN:      return "(";
+        case TOKEN_RPAREN:      return ")";
+
+        case TOKEN_LBRACE:      return "{";
+        case TOKEN_RBRACE:      return "}";
+
+        case TOKEN_COMMA:       return ",";
+        case TOKEN_SEMICOLON:   return ";";
+
+        case TOKEN_ID:          return "identificador";
+        case TOKEN_NUM:         return "numero";
+
+        case TOKEN_STRING:      return "string";
+        case TOKEN_CHAR_LITERAL:return "char literal";
+
+        case TOKEN_EOF:         return "EOF";
+
+        default:                return "desconhecido";
     }
 }
 
