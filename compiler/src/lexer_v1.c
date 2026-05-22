@@ -79,6 +79,7 @@ TokenType palavra_chave_ou_id(const char *lexema){
     if(strcmp(lexema, "struct") == 0) return TOKEN_STRUCT;
     if(strcmp(lexema, "enum") == 0) return TOKEN_ENUM;
     if(strcmp(lexema, "break") == 0) return TOKEN_BREAK;
+    if(strcmp(lexema, "continue") == 0) return TOKEN_CONTINUE;
 
     return TOKEN_ID; // Se não for uma palavra reservada, é um identificador
 }
@@ -446,6 +447,7 @@ const char* token_para_string(TokenType type){
         case TOKEN_STRUCT: return "TOKEN_STRUCT";
         case TOKEN_ENUM: return "TOKEN_ENUM";
         case TOKEN_BREAK: return "TOKEN_BREAK";
+        case TOKEN_CONTINUE: return "TOKEN_CONTINUE";
 
         case TOKEN_PLUS: return "TOKEN_PLUS";
         case TOKEN_MINUS: return "TOKEN_MINUS";
