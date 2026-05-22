@@ -3,6 +3,8 @@
 void inicializar_parser(Parser *parser, Lexer *lexer) {
     parser->lexer = lexer;
     parser->current_token = pegar_prox_token(lexer);
+    parser->em_recuperacao = 0;
+    parser->quantidade_erros = 0;
 }
 
 void avancar_token(Parser *parser) {
@@ -10,22 +12,73 @@ void avancar_token(Parser *parser) {
 }
 
 void erro_de_sintaxe(Parser *parser, const char *mensagem){
-    printf("Erro sintático: %s\n", mensagem);
-    printf("Token encontrado: %s | lexema: \"%s\" | line: %d | column: %d\n",
-           token_para_string(parser->current_token.type),
-           parser->current_token.lexema,
-           parser->current_token.line,
-           parser->current_token.column);
-           exit(1);
+
+    if(parser->em_recuperacao){
+        return;
+    }
+
+    parser->em_recuperacao = 1;
+
+    parser->quantidade_erros++;
+
+    printf("\n====================================\n");
+    printf("Erro sintático #%d\n", parser->quantidade_erros);
+    printf("====================================\n");
+
+    printf("Mensagem : %s\n", mensagem);
+
+    printf("Linha    : %d\n", parser->current_token.line);
+    printf("Coluna   : %d\n", parser->current_token.column);
+
+    printf("\nToken encontrado:\n");
+
+    printf("Tipo     : %s\n",
+           token_para_string(parser->current_token.type));
+
+    printf("Lexema   : \"%s\"\n",
+           parser->current_token.lexema);
+
+    printf("====================================\n\n");
 }
 
 void consumir_token(Parser *parser, TokenType tipo_esperado){
+
     if(parser->current_token.type == tipo_esperado){
+
         avancar_token(parser);
+
     } else {
-        printf("Esperado: %s\n", token_para_string(tipo_esperado));
-        erro_de_sintaxe(parser, "Token inesperado");
+
+        char mensagem[200];
+
+        sprintf(
+            mensagem,
+            "Esperado %s mas encontrado %s",
+            token_para_string(tipo_esperado),
+            token_para_string(parser->current_token.type)
+        );
+
+        erro_de_sintaxe(parser, mensagem);
     }
+}
+
+void sincronizar_parser(Parser *parser){
+
+    while(parser->current_token.type != TOKEN_EOF){
+
+        if(parser->current_token.type == TOKEN_SEMICOLON){
+            avancar_token(parser);
+            break;
+        }
+
+        if(parser->current_token.type == TOKEN_RBRACE){
+            break;
+        }
+
+        avancar_token(parser);
+    }
+
+    parser->em_recuperacao = 0;
 }
 
 void analisar_programa(Parser *parser){
@@ -75,8 +128,10 @@ void analisar_bloco(Parser *parser){
 }
 
 void analisar_lista_de_comandos(Parser *parser){
-    while(parser->current_token.type != TOKEN_EOF &&
-          parser->current_token.type != TOKEN_RBRACE){
+
+    while(parser->current_token.type != TOKEN_RBRACE &&
+          parser->current_token.type != TOKEN_EOF){
+
         analisar_comando(parser);
     }
 }
@@ -107,6 +162,12 @@ void analisar_comando(Parser *parser){
 
     } else if(parser->current_token.type == TOKEN_RETURN){
         analisar_return(parser);
+
+    } else if(parser->current_token.type == TOKEN_BREAK){
+        analisar_break(parser);
+
+    } else if(parser->current_token.type == TOKEN_CONTINUE){
+        analisar_continue(parser);
 
     } else {
         erro_de_sintaxe(parser, "Esperado declaração de variável ou atribuição");
@@ -140,7 +201,13 @@ void analisar_comando_iniciado_por_id(Parser *parser){
         consumir_token(parser, TOKEN_SEMICOLON);
 
     } else {
-        erro_de_sintaxe(parser, "Esperado atribuição ou chamada de função");
+
+        erro_de_sintaxe(
+            parser,
+            "Esperado atribuição, chamada de função, incremento ou decremento"
+        );
+
+        sincronizar_parser(parser);
     }
 }
 
@@ -215,7 +282,7 @@ void analisar_for(Parser *parser){
     analisar_condicao(parser);
     consumir_token(parser, TOKEN_SEMICOLON);
 
-    analisar_atribuicao_sem_ponto_virgula(parser);
+    analisar_expressao_de_incremento(parser);
 
     consumir_token(parser, TOKEN_RPAREN);
 
@@ -245,6 +312,16 @@ void analisar_return(Parser *parser){
         analisar_expressao(parser);
     }
 
+    consumir_token(parser, TOKEN_SEMICOLON);
+}
+
+void analisar_break(Parser *parser){
+    consumir_token(parser, TOKEN_BREAK);
+    consumir_token(parser, TOKEN_SEMICOLON);
+}
+
+void analisar_continue(Parser *parser){
+    consumir_token(parser, TOKEN_CONTINUE);
     consumir_token(parser, TOKEN_SEMICOLON);
 }
 
@@ -355,6 +432,41 @@ void analisar_expressao(Parser *parser){
         }
 
         analisar_termo(parser);
+    }
+}
+
+void analisar_expressao_de_incremento(Parser *parser){
+    if(parser->current_token.type == TOKEN_ID){
+
+        consumir_token(parser, TOKEN_ID);
+
+        if(parser->current_token.type == TOKEN_INCREMENT){
+            consumir_token(parser, TOKEN_INCREMENT);
+
+        } else if(parser->current_token.type == TOKEN_DECREMENT){
+            consumir_token(parser, TOKEN_DECREMENT);
+
+        } else if(parser->current_token.type == TOKEN_ASSIGN){
+            consumir_token(parser, TOKEN_ASSIGN);
+            analisar_expressao(parser);
+
+        } else {
+            erro_de_sintaxe(parser,
+                "Esperado ++, -- ou = no incremento do for");
+        }
+
+    } else if(parser->current_token.type == TOKEN_INCREMENT){
+
+        consumir_token(parser, TOKEN_INCREMENT);
+        consumir_token(parser, TOKEN_ID);
+
+    } else if(parser->current_token.type == TOKEN_DECREMENT){
+
+        consumir_token(parser, TOKEN_DECREMENT);
+        consumir_token(parser, TOKEN_ID);
+
+    } else {
+        erro_de_sintaxe(parser, "Incremento invalido no for");
     }
 }
 

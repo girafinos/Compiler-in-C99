@@ -19,7 +19,19 @@ int main(int argc, char *argv[]) {
 
     analisar_programa(&parser);
 
-    printf("Análise sintática concluída com sucesso!\n");
+    printf("\n");
+
+    if(parser.quantidade_erros == 0){
+
+        printf("Análise sintática concluída com sucesso.\n");
+
+    } else {
+
+        printf(
+            "Análise sintática concluída com %d erro(s).\n",
+            parser.quantidade_erros
+        );
+    }
 
     free(source);
     return 0;

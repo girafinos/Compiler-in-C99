@@ -29,6 +29,7 @@ typedef enum {
     TOKEN_STRUCT,
     TOKEN_ENUM,
     TOKEN_BREAK,
+    TOKEN_CONTINUE,
 
     //Operadores
     TOKEN_PLUS,        //+

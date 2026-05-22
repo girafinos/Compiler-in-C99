@@ -6,6 +6,8 @@
 typedef struct {
     Lexer *lexer;
     Token current_token;
+    int quantidade_erros;
+    int em_recuperacao;
 } Parser;
 
 // =========== Infraestrutura do Parser ===========
@@ -15,6 +17,7 @@ void avancar_token(Parser *parser);
 
 void erro_de_sintaxe(Parser *parser, const char *mensagem);
 void consumir_token(Parser *parser, TokenType tipo_esperado);
+void sincronizar_parser(Parser *parser);
 
 // =========== Análise Geral do Programa ==========
 
@@ -43,6 +46,8 @@ void analisar_while(Parser *parser);
 void analisar_for(Parser *parser); 
 void analisar_inicializacao_for(Parser *parser);
 void analisar_return(Parser *parser);
+void analisar_break(Parser *parser);
+void analisar_continue(Parser *parser);
 
 // =========== Tipos ==========
 
@@ -58,6 +63,7 @@ void analisar_operador_relacional(Parser *parser);
 // =========== Expressões ==========
 
 void analisar_expressao(Parser *parser);
+void analisar_expressao_de_incremento(Parser *parser);
 void analisar_termo(Parser *parser);
 void analisar_fator(Parser *parser);
 void analisar_lista_de_argumentos(Parser *parser);
