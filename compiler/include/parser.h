@@ -3,6 +3,12 @@
 
 #include "lexer_v1.h"
 
+#define RED     "\x1b[31m"
+#define YELLOW  "\x1b[33m"
+#define CYAN    "\x1b[36m"
+#define GREEN   "\x1b[32m"
+#define RESET   "\x1b[0m"
+
 typedef struct {
     Lexer *lexer;
     Token current_token;
@@ -20,6 +26,7 @@ void consumir_token(Parser *parser, TokenType tipo_esperado);
 void sincronizar_parser(Parser *parser);
 void sincronizar_ate(Parser *parser, TokenType token);
 void mostrar_linha_erro(Parser *parser);
+const char *token_para_simbolo(TokenType type);
 
 // =========== Análise Geral do Programa ==========
 
