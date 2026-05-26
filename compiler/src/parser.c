@@ -1,27 +1,23 @@
 #include "parser.h"
 
-void inicializar_parser(Parser *parser, Lexer *lexer) {
+void inicializar_parser(Parser *parser, Lexer *lexer){
     parser->lexer = lexer;
     parser->current_token = pegar_prox_token(lexer);
     parser->em_recuperacao = 0;
     parser->quantidade_erros = 0;
 }
 
-void avancar_token(Parser *parser) {
+void avancar_token(Parser *parser){
     parser->current_token = pegar_prox_token(parser->lexer);
 }
 
-void erro_de_sintaxe(Parser *parser,
-                     const char *mensagem){
-
+void erro_de_sintaxe(Parser *parser, const char *mensagem){
     if(parser->em_recuperacao){
         return;
     }
 
     parser->em_recuperacao = 1;
-
     parser->quantidade_erros++;
-
     printf("\n");
 
     printf(RED
@@ -46,30 +42,23 @@ void erro_de_sintaxe(Parser *parser,
            token_para_string(
                parser->current_token.type
            ));
-
     printf("  Símbolo : %s\n",
            token_para_simbolo(
                parser->current_token.type
            ));
-
     printf("  Lexema  : \"%s\"\n\n",
            parser->current_token.lexema);
 
     printf(YELLOW "Trecho:\n" RESET);
-
     mostrar_linha_erro(parser);
 }
 
 void consumir_token(Parser *parser, TokenType tipo_esperado){
-
     if(parser->current_token.type == tipo_esperado){
-
         avancar_token(parser);
 
-    } else {
-
+    }else{
         char mensagem[200];
-
         sprintf(
             mensagem,
             "Esperado %s mas encontrado %s",
@@ -82,7 +71,6 @@ void consumir_token(Parser *parser, TokenType tipo_esperado){
 }
 
 void sincronizar_parser(Parser *parser){
-
     while(parser->current_token.type != TOKEN_EOF){
 
         if(parser->current_token.type == TOKEN_SEMICOLON){
@@ -101,9 +89,7 @@ void sincronizar_parser(Parser *parser){
 }
 
 void sincronizar_ate(Parser *parser, TokenType token){
-
     while(parser->current_token.type != TOKEN_EOF){
-
         if(parser->current_token.type == token){
             return;
         }
@@ -113,16 +99,12 @@ void sincronizar_ate(Parser *parser, TokenType token){
 }
 
 void mostrar_linha_erro(Parser *parser){
-
     char *source = parser->lexer->src;
-
     int linha_atual = 1;
     int i = 0;
 
     while(source[i] != '\0'){
-
         if(linha_atual == parser->current_token.line){
-
             printf(CYAN "%4d | " RESET,
                    linha_atual);
 
@@ -134,7 +116,6 @@ void mostrar_linha_erro(Parser *parser){
             }
 
             printf("\n");
-
             printf("       ");
 
             for(int j = 1;
@@ -145,7 +126,6 @@ void mostrar_linha_erro(Parser *parser){
             }
 
             printf(RED "^\n" RESET);
-
             return;
         }
 
@@ -158,7 +138,6 @@ void mostrar_linha_erro(Parser *parser){
 }
 
 const char *token_para_simbolo(TokenType type){
-
     switch(type){
 
         case TOKEN_INT:         return "int";
@@ -221,16 +200,15 @@ void analisar_programa(Parser *parser){
     consumir_token(parser, TOKEN_EOF);
 }
 
-void analisar_lista_de_funcoes(Parser *parser) {
+void analisar_lista_de_funcoes(Parser *parser){
     while (parser->current_token.type != TOKEN_EOF) {
         analisar_funcao(parser);
     }
 }
 
-void analisar_funcao(Parser *parser) {
+void analisar_funcao(Parser *parser){
     analisar_tipo(parser);
     consumir_token(parser, TOKEN_ID);
-
     consumir_token(parser, TOKEN_LPAREN);
 
     if(parser->current_token.type != TOKEN_RPAREN){
@@ -348,7 +326,6 @@ void analisar_comando_iniciado_por_id(Parser *parser){
         consumir_token(parser, TOKEN_SEMICOLON);
 
     } else {
-
         erro_de_sintaxe(
             parser,
             "Esperado atribuição, chamada de função, incremento ou decremento"
@@ -368,7 +345,12 @@ void analisar_declaracao(Parser *parser){
         analisar_expressao(parser);
     }
 
-    consumir_token(parser, TOKEN_SEMICOLON);
+    if(parser->current_token.type == TOKEN_SEMICOLON){
+        consumir_token(parser, TOKEN_SEMICOLON);
+    } else {
+        erro_de_sintaxe(parser, "Esperado ';' ao final da declaração");
+        sincronizar_ate(parser, TOKEN_SEMICOLON);
+    }
 }
 
 void analisar_declaracao_sem_ponto_virgula(Parser *parser){
@@ -473,13 +455,10 @@ void analisar_continue(Parser *parser){
 }
 
 void analisar_tipo(Parser *parser){
-
     if(token_eh_tipo(parser->current_token.type)){
-
         avancar_token(parser);
 
     } else {
-
         erro_de_sintaxe(parser, "Tipo esperado");
     }
 }
@@ -499,7 +478,6 @@ void analisar_incremento_decremento(Parser *parser){
 }
 
 int token_eh_operador_relacional(TokenType type){
-
     return type == TOKEN_LT  ||
            type == TOKEN_GT  ||
            type == TOKEN_LTE ||
@@ -509,7 +487,6 @@ int token_eh_operador_relacional(TokenType type){
 }
 
 int token_eh_tipo(TokenType type){
-
     return type == TOKEN_INT  ||
            type == TOKEN_CHAR ||
            type == TOKEN_VOID;
@@ -531,7 +508,7 @@ void analisar_condicao(Parser *parser){
     }
 }
 
-void analisar_condicao_relacional(Parser *parser) {
+void analisar_condicao_relacional(Parser *parser){
     analisar_expressao(parser);
 
     if(parser->current_token.type == TOKEN_LT ||
@@ -547,13 +524,10 @@ void analisar_condicao_relacional(Parser *parser) {
 }
 
 void analisar_operador_relacional(Parser *parser){
-
     if(token_eh_operador_relacional(parser->current_token.type)){
-
         avancar_token(parser);
 
-    } else {
-
+    }else{
         erro_de_sintaxe(
             parser,
             "Operador relacional esperado"
@@ -579,7 +553,6 @@ void analisar_expressao(Parser *parser){
 
 void analisar_expressao_de_incremento(Parser *parser){
     if(parser->current_token.type == TOKEN_ID){
-
         consumir_token(parser, TOKEN_ID);
 
         if(parser->current_token.type == TOKEN_INCREMENT){
@@ -628,7 +601,7 @@ void analisar_termo(Parser *parser){
     }
 }
 
-void analisar_fator(Parser *parser) {
+void analisar_fator(Parser *parser){
     if(parser->current_token.type == TOKEN_MINUS){
         consumir_token(parser, TOKEN_MINUS);
         analisar_fator(parser);
@@ -691,25 +664,20 @@ void analisar_fator(Parser *parser) {
 }
 
 void analisar_lista_de_argumentos(Parser *parser){
-
     analisar_expressao(parser);
 
     while(parser->current_token.type == TOKEN_COMMA){
-
         consumir_token(parser, TOKEN_COMMA);
 
         if(parser->current_token.type == TOKEN_RPAREN){
-
             erro_de_sintaxe(
                 parser,
                 "Esperada expressão após vírgula"
             );
 
             sincronizar_ate(parser, TOKEN_RPAREN);
-
             return;
         }
-
         analisar_expressao(parser);
     }
 }
