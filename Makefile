@@ -3,7 +3,8 @@ CFLAGS = -Wall -Wextra -std=c99 -Icompiler/include
 
 SRC = compiler/src/main.c \
       compiler/src/lexer_v1.c \
-      compiler/src/parser.c
+      compiler/src/parser.c \
+      compiler/src/ast.c
 
 OUT = lexer
 

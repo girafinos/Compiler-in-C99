@@ -2,6 +2,7 @@
 #define PARSER_H
 
 #include "lexer_v1.h"
+#include "ast.h"
 
 #define RED     "\x1b[31m"
 #define YELLOW  "\x1b[33m"
@@ -32,31 +33,31 @@ const char *token_para_simbolo(TokenType type);
 
 // =========== Análise Geral do Programa ===========
 
-void analisar_programa(Parser *parser);
-void analisar_lista_de_funcoes(Parser *parser);
-void analisar_funcao(Parser *parser);
-void analisar_lista_de_parametros(Parser *parser);
-void analisar_parametro(Parser *parser);
-void analisar_bloco(Parser *parser);
-void analisar_lista_de_comandos(Parser *parser);
-void analisar_comando(Parser *parser);
-void analisar_comando_iniciado_por_id(Parser *parser);
+ASTNode *analisar_programa(Parser *parser);
+ASTNode *analisar_lista_de_funcoes(Parser *parser);
+ASTNode *analisar_funcao(Parser *parser);
+ASTNode *analisar_lista_de_parametros(Parser *parser);
+ASTNode *analisar_parametro(Parser *parser);
+ASTNode *analisar_bloco(Parser *parser);
+ASTNode *analisar_lista_de_comandos(Parser *parser);
+ASTNode *analisar_comando(Parser *parser);
+ASTNode *analisar_comando_iniciado_por_id(Parser *parser);
 
 // =========== Comandos ===========
 
-void analisar_declaracao(Parser *parser);
-void analisar_declaracao_sem_ponto_virgula(Parser *parser);
-void analisar_atribuicao(Parser *parser);
-void analisar_atribuicao_sem_ponto_virgula(Parser *parser);
-void analisar_if(Parser *parser);
-void analisar_while(Parser *parser);
-void analisar_for(Parser *parser);
-void analisar_inicializacao_for(Parser *parser);
-void analisar_return(Parser *parser);
-void analisar_break(Parser *parser);
-void analisar_continue(Parser *parser);
-void analisar_incremento_decremento(Parser *parser);
-void analisar_expressao_de_incremento(Parser *parser);
+ASTNode *analisar_declaracao(Parser *parser);
+ASTNode *analisar_declaracao_sem_ponto_virgula(Parser *parser);
+ASTNode *analisar_atribuicao(Parser *parser);
+ASTNode *analisar_atribuicao_sem_ponto_virgula(Parser *parser);
+ASTNode *analisar_if(Parser *parser);
+ASTNode *analisar_while(Parser *parser);
+ASTNode *analisar_for(Parser *parser);
+ASTNode *analisar_inicializacao_for(Parser *parser);
+ASTNode *analisar_return(Parser *parser);
+ASTNode *analisar_break(Parser *parser);
+ASTNode *analisar_continue(Parser *parser);
+ASTNode *analisar_incremento_decremento(Parser *parser);
+ASTNode *analisar_expressao_de_incremento(Parser *parser);
 
 // =========== Tipos e Auxiliares ===========
 
@@ -65,19 +66,17 @@ int token_eh_operador_relacional(TokenType type);
 int token_eh_tipo(TokenType type);
 
 // =========== Condições ===========
-// Retornam int para propagar falha ao chamador
 
-int analisar_condicao(Parser *parser);
-int analisar_condicao_relacional(Parser *parser);
+ASTNode *analisar_condicao(Parser *parser);
+ASTNode *analisar_condicao_relacional(Parser *parser);
 void analisar_operador_relacional(Parser *parser);
 
 // =========== Expressões ===========
-// Retornam int para propagar falha ao chamador
 
-int analisar_expressao(Parser *parser);
-int analisar_termo(Parser *parser);
-int analisar_fator(Parser *parser);
-int analisar_lista_de_argumentos(Parser *parser);
-void analisar_chamada_funcao(Parser *parser);
+ASTNode *analisar_expressao(Parser *parser);
+ASTNode *analisar_termo(Parser *parser);
+ASTNode *analisar_fator(Parser *parser);
+ASTNode *analisar_lista_de_argumentos(Parser *parser);
+ASTNode *analisar_chamada_funcao(Parser *parser, const char *name, int line, int column);
 
 #endif // PARSER_H
