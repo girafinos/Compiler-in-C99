@@ -1,3 +1,243 @@
-int x;
-int y;
-x = y - 3;
+// ============================================================
+// ARQUIVO DE TESTE DO PARSER
+// Contém código válido seguido de erros intencionais isolados.
+// Cada erro tem um comentário explicando o que é esperado.
+// ============================================================
+
+int soma(int a, int b) {
+    return a + b;
+}
+
+int multiplicar(int x, int y) {
+    return x * y;
+}
+
+void mensagem() {
+    return;
+}
+
+int main() {
+
+    // =========================
+    // DECLARAÇÕES VÁLIDAS
+    // =========================
+
+    int x = 10;
+    int y = 5;
+    int z;
+
+    char letra = 'A';
+    char quebra = '\n';
+
+    // =========================
+    // EXPRESSÕES VÁLIDAS
+    // =========================
+
+    x = x + y;
+    x = x - y;
+    x = x * y;
+    x = x / y;
+
+    x = (x + y) * 2;
+
+    x = -x;
+    x = !y;
+
+    // =========================
+    // CHAMADAS DE FUNÇÃO
+    // =========================
+
+    z = soma(x, y);
+    z = multiplicar(z, 2);
+
+    mensagem();
+
+    // =========================
+    // INCREMENTOS VÁLIDOS
+    // =========================
+
+    x++;
+    x--;
+    ++x;
+    --x;
+
+    // =========================
+    // IF / ELSE VÁLIDOS
+    // =========================
+
+    if(x > y) {
+        x = x + 1;
+    }
+
+    if(x > y && y > 0) {
+        x = x + 1;
+    } else {
+        x = x - 1;
+    }
+
+    if(!x) {
+        x = 0;
+    }
+
+    // =========================
+    // WHILE VÁLIDO
+    // =========================
+
+    while(x > 0) {
+        x--;
+    }
+
+    // =========================
+    // FOR VÁLIDOS
+    // =========================
+
+    for(int i = 0; i < 10; i++) {
+        z = z + i;
+    }
+
+    for(y = 0; y < 5; y = y + 1) {
+        z = z + y;
+    }
+
+    // =========================
+    // BREAK / CONTINUE VÁLIDOS
+    // =========================
+
+    while(z > 0) {
+        z--;
+        if(z == 8) {
+            continue;
+        }
+        if(z == 3) {
+            break;
+        }
+    }
+
+    // =========================
+    // STRINGS VÁLIDAS
+    // =========================
+
+    mensagem();
+
+    // =====================================================
+    // ========= ERROS INTENCIONAIS (isolados) =============
+    // =====================================================
+
+    // ERRO 1: falta ';' ao final da declaração
+    // Esperado: ERRO SINTÁTICO — "Esperado ;, mas encontrado identificador"
+    // Recuperação: retoma no ERRO 2
+    int erro1 = 10
+
+    // ERRO 2: tipo inválido (identificador onde se espera tipo)
+    // Esperado: ERRO SINTÁTICO — "Esperado atribuição, chamada de função, ++ ou -- após o identificador"
+    // Recuperação: retoma no ERRO 3
+    floaat variavel;
+
+    // ERRO 3: fator inválido — operador onde se espera valor
+    // Esperado: ERRO SINTÁTICO — "Expressão inválida: fator ausente ou operador isolado"
+    // Recuperação: retoma no ERRO 4
+    x = + ;
+
+    // ERRO 4: parêntese de fechamento ausente no if
+    // Esperado: ERRO SINTÁTICO — "Esperado ), mas encontrado {"
+    // Recuperação: retoma no corpo do if
+    if(x > 0 {
+        x++;
+    }
+
+    // ERRO 5: vírgula sobrando na chamada de função
+    // Esperado: ERRO SINTÁTICO — "Falta uma expressão após a vírgula"
+    // Recuperação: retoma após ')' da chamada
+    soma(x, );
+
+    // ERRO 6: incremento duplo inválido
+    // Esperado: ERRO SINTÁTICO — "Esperado ;, mas encontrado ++"
+    // Recuperação: retoma no ERRO 7
+    x++++;
+
+    // ERRO 7: expressão vazia entre parênteses
+    // Esperado: ERRO SINTÁTICO — "Expressão vazia entre parênteses"
+    // Recuperação: retoma no ERRO 8
+    x = ();
+
+    // ERRO 8: condição do for incompleta (falta o lado direito)
+    // Esperado: ERRO SINTÁTICO — "Expressão inválida: fator ausente ou operador isolado"
+    // Recuperação: retoma no ERRO 9
+    for(int j = 0; j < ; j++) {
+        x++;
+    }
+
+    // ERRO 9: operador relacional ausente no if
+    // Esperado: ERRO SINTÁTICO — "Esperado ), mas encontrado identificador"
+    // Recuperação: retoma no ERRO 10
+    if(x y) {
+        x++;
+    }
+
+    // ERRO 10: return com expressão inválida
+    // Esperado: ERRO SINTÁTICO — "Expressão inválida: fator ausente ou operador isolado"
+    // Recuperação: retoma no ERRO 11
+    return + ;
+}
+
+// -------------------------------------------------------
+// ERRO 11: chave de fechamento solta no escopo global
+// (separado da main para não contaminar a recuperação acima)
+// Esperado: ERRO SINTÁTICO — "Chave de fechamento inesperada no escopo global"
+// Recuperação: descarta o '}' e continua analisando funções
+// -------------------------------------------------------
+}
+
+// -------------------------------------------------------
+// ERRO 12: função com parâmetro sem tipo
+// Esperado: ERRO SINTÁTICO — "Tipo esperado: int, char ou void"
+// Recuperação: sincroniza até ')', tenta continuar
+// -------------------------------------------------------
+void semTipo(x) {
+    return;
+}
+
+// =====================================================
+// ========= NOVOS ERROS PARA COBRIR RECUPERAÇÃO ======
+// =====================================================
+
+// ERRO 13: condição vazia no if
+// Esperado: ERRO SINTÁTICO — "Expressão inválida: fator ausente ou operador isolado"
+// Recuperação: segue para o corpo do if
+void erro13() {
+    if() {
+        x = 1;
+    }
+}
+
+// ERRO 14: parêntese de fechamento ausente no while
+// Esperado: ERRO SINTÁTICO — "Esperado ), mas encontrado {"
+// Recuperação: segue para o corpo do while
+void erro14() {
+    while(x > 0 {
+        x--;
+    }
+}
+
+// ERRO 15: parte de incremento do for inválida
+// Esperado: ERRO SINTÁTICO — "Esperado ++, -- ou = na parte de incremento do for"
+// Recuperação: segue para o corpo do for
+void erro15() {
+    for(int k = 0; k < 5; k + 1) {
+        x++;
+    }
+}
+
+// ERRO 16: parte de incremento do for inválida
+// Esperado: ERRO SINTÁTICO — "Esperado ++, -- ou = na parte de incremento do for"
+// Recuperação: segue para o corpo do for
+void erro15() {
+    for(int k = 0; k < 5; k +++) {
+        x++;
+    }
+}
+
+// Função válida após os erros — deve ser analisada sem erros
+int valida() {
+    return 42;
+}
