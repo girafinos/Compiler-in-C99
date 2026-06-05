@@ -1,4 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include "parser.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // =============================================================================
 //  INFRAESTRUTURA DO PARSER
@@ -15,13 +19,7 @@ void avancar_token(Parser *parser){
     parser->current_token = pegar_prox_token(parser->lexer);
 }
 
-// -----------------------------------------------------------------------------
-// erro_de_sintaxe — agora retorna int (sempre 0 / falha).
-// Permite escrever:  return erro_de_sintaxe(parser, "...");
-// ou:               if(!analisar_X(parser)) { ... }
-// -----------------------------------------------------------------------------
 int erro_de_sintaxe(Parser *parser, const char *mensagem){
-    // Se já estamos em recuperação, silencia para não gerar cascata.
     if(parser->em_recuperacao) return 0;
 
     parser->em_recuperacao = 1;
@@ -48,13 +46,9 @@ int erro_de_sintaxe(Parser *parser, const char *mensagem){
     printf(YELLOW "Trecho:\n" RESET);
     mostrar_linha_erro(parser);
 
-    return 0; // sempre indica falha
+    return 0;
 }
 
-// -----------------------------------------------------------------------------
-// consumir_token — retorna 1 (sucesso) ou 0 (falha).
-// Se já estamos em recuperação, retorna 0 sem gerar novo erro.
-// -----------------------------------------------------------------------------
 int consumir_token(Parser *parser, TokenType tipo_esperado){
     if(parser->em_recuperacao) return 0;
 
@@ -72,44 +66,30 @@ int consumir_token(Parser *parser, TokenType tipo_esperado){
     return erro_de_sintaxe(parser, mensagem);
 }
 
-// -----------------------------------------------------------------------------
-// sincronizar_parser — recuperação genérica: avança até ';' ou '}'.
-// Usado em comandos quando não sabemos um token de retomada mais preciso.
-// -----------------------------------------------------------------------------
 void sincronizar_parser(Parser *parser){
     while(parser->current_token.type != TOKEN_EOF){
         if(parser->current_token.type == TOKEN_SEMICOLON){
-            avancar_token(parser); // consome o ';'
+            avancar_token(parser);
             break;
         }
         if(parser->current_token.type == TOKEN_RBRACE){
-            break; // não consome o '}': pertence ao bloco pai
+            break;
         }
         avancar_token(parser);
     }
-    parser->em_recuperacao = 0; // pronto para retomar
+    parser->em_recuperacao = 0;
 }
 
-// -----------------------------------------------------------------------------
-// sincronizar_ate — recuperação cirúrgica: avança até um token específico
-// e o deixa como current_token (sem consumir), liberando o chamador para
-// fazer consumir_token normalmente em seguida.
-// -----------------------------------------------------------------------------
 void sincronizar_ate(Parser *parser, TokenType token){
     while(parser->current_token.type != TOKEN_EOF){
         if(parser->current_token.type == token){
-            parser->em_recuperacao = 0; // pronto para retomar
+            parser->em_recuperacao = 0;
             return;
         }
         avancar_token(parser);
     }
-    // Se chegou no EOF sem achar o token, apenas libera o flag.
     parser->em_recuperacao = 0;
 }
-
-// =============================================================================
-//  UTILITÁRIOS DE EXIBIÇÃO
-// =============================================================================
 
 void mostrar_linha_erro(Parser *parser){
     const char *source = parser->lexer->src;
@@ -126,15 +106,12 @@ void mostrar_linha_erro(Parser *parser){
             }
 
             printf("\n       ");
-
             for(int j = 1; j < parser->current_token.column; j++){
                 printf(" ");
             }
-
             printf(RED "^\n" RESET);
             return;
         }
-
         if(source[i] == '\n') linha_atual++;
         i++;
     }
@@ -183,10 +160,6 @@ const char *token_para_simbolo(TokenType type){
     }
 }
 
-// =============================================================================
-//  TIPOS E OPERADORES — AUXILIARES
-// =============================================================================
-
 int token_eh_tipo(TokenType type){
     return type == TOKEN_INT  ||
            type == TOKEN_CHAR ||
@@ -202,7 +175,6 @@ int token_eh_operador_relacional(TokenType type){
            type == TOKEN_NEQ;
 }
 
-// analisar_tipo agora retorna int para que o chamador saiba se falhou.
 int analisar_tipo(Parser *parser){
     if(parser->em_recuperacao) return 0;
 
@@ -214,150 +186,219 @@ int analisar_tipo(Parser *parser){
     return erro_de_sintaxe(parser, "Tipo esperado: int, char ou void");
 }
 
-// =============================================================================
-//  EXPRESSÕES
-//  Todas retornam int: 1 = ok, 0 = erro.
-//  Cada nível para imediatamente se o nível interno falhou.
-// =============================================================================
+ASTNode *analisar_lista_de_argumentos(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-// -----------------------------------------------------------------------------
-// analisar_lista_de_argumentos
-// -----------------------------------------------------------------------------
-int analisar_lista_de_argumentos(Parser *parser){
-    if(parser->em_recuperacao) return 0;
-
-    if(!analisar_expressao(parser)) return 0;
+    ASTNode *arguments = NULL;
+    ASTNode *expr = analisar_expressao(parser);
+    if(!expr) return NULL;
+    arguments = ast_append(arguments, expr);
 
     while(parser->current_token.type == TOKEN_COMMA){
         consumir_token(parser, TOKEN_COMMA);
 
         if(parser->current_token.type == TOKEN_RPAREN){
-            return erro_de_sintaxe(parser,
-                       "Falta uma expressão após a vírgula");
+            erro_de_sintaxe(parser, "Falta uma expressão após a vírgula");
+            return NULL;
         }
 
-        if(!analisar_expressao(parser)) return 0;
+        expr = analisar_expressao(parser);
+        if(!expr) return NULL;
+        arguments = ast_append(arguments, expr);
     }
 
-    return 1;
+    return arguments;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_fator — nível mais profundo da hierarquia de expressões.
-// -----------------------------------------------------------------------------
-int analisar_fator(Parser *parser){
-    if(parser->em_recuperacao) return 0;
+ASTNode *analisar_chamada_funcao(Parser *parser, const char *name, int line, int column){
+    if(parser->em_recuperacao) return NULL;
 
-    // Operador unário: negativo
-    if(parser->current_token.type == TOKEN_MINUS){
-        consumir_token(parser, TOKEN_MINUS);
-        return analisar_fator(parser);
+    ASTNode *call = ast_new_node(AST_FUNCTION_CALL, line, column);
+    if(!call) return NULL;
+    call->name = strdup(name);
+
+    if(!consumir_token(parser, TOKEN_LPAREN)){
+        ast_free(call);
+        return NULL;
     }
 
-    // Operador unário: negação lógica
-    if(parser->current_token.type == TOKEN_NOT){
-        consumir_token(parser, TOKEN_NOT);
-        return analisar_fator(parser);
+    if(parser->current_token.type != TOKEN_RPAREN){
+        call->left = analisar_lista_de_argumentos(parser);
+        if(parser->em_recuperacao){
+            sincronizar_ate(parser, TOKEN_RPAREN);
+        }
     }
 
-    // Identificador ou chamada de função
+    consumir_token(parser, TOKEN_RPAREN);
+    return call;
+}
+
+ASTNode *analisar_fator(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    if(parser->current_token.type == TOKEN_MINUS ||
+       parser->current_token.type == TOKEN_NOT){
+        TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
+        consumir_token(parser, op);
+        ASTNode *operand = analisar_fator(parser);
+        if(!operand) return NULL;
+
+        ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
+        node->value_type = op;
+        node->left = operand;
+        return node;
+    }
+
     if(parser->current_token.type == TOKEN_ID){
+        char name[100];
+        strcpy(name, parser->current_token.lexema);
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
         consumir_token(parser, TOKEN_ID);
 
         if(parser->current_token.type == TOKEN_LPAREN){
-            // chamada de função
-            consumir_token(parser, TOKEN_LPAREN);
-
-            if(parser->current_token.type != TOKEN_RPAREN){
-                if(!analisar_lista_de_argumentos(parser)){
-                    sincronizar_ate(parser, TOKEN_RPAREN);
-                }
-            }
-
-            return consumir_token(parser, TOKEN_RPAREN);
+            return analisar_chamada_funcao(parser, name, line, column);
         }
 
-        return 1;
+        return ast_new_identifier(name, line, column);
     }
 
-    // Número literal
-    if(parser->current_token.type == TOKEN_NUM){
-        return consumir_token(parser, TOKEN_NUM);
+    if(parser->current_token.type == TOKEN_NUM ||
+       parser->current_token.type == TOKEN_CHAR_LITERAL ||
+       parser->current_token.type == TOKEN_STRING){
+        ASTNode *literal = ast_new_literal(parser->current_token.lexema,
+                                          parser->current_token.type,
+                                          parser->current_token.line,
+                                          parser->current_token.column);
+        consumir_token(parser, parser->current_token.type);
+        return literal;
     }
 
-    // Char literal
-    if(parser->current_token.type == TOKEN_CHAR_LITERAL){
-        return consumir_token(parser, TOKEN_CHAR_LITERAL);
-    }
-
-    // String literal
-    if(parser->current_token.type == TOKEN_STRING){
-        return consumir_token(parser, TOKEN_STRING);
-    }
-
-    // Expressão entre parênteses
     if(parser->current_token.type == TOKEN_LPAREN){
         consumir_token(parser, TOKEN_LPAREN);
 
         if(parser->current_token.type == TOKEN_RPAREN){
-            return erro_de_sintaxe(parser,
-                       "Expressão vazia entre parênteses");
+            erro_de_sintaxe(parser, "Expressão vazia entre parênteses");
+            return NULL;
         }
 
-        if(!analisar_expressao(parser)){
+        ASTNode *expression = analisar_expressao(parser);
+        if(parser->em_recuperacao){
             sincronizar_ate(parser, TOKEN_RPAREN);
         }
 
-        return consumir_token(parser, TOKEN_RPAREN);
+        consumir_token(parser, TOKEN_RPAREN);
+        return expression;
     }
 
-    return erro_de_sintaxe(parser, "Expressão inválida: fator ausente ou operador isolado");
+    erro_de_sintaxe(parser, "Expressão inválida: fator ausente ou operador isolado");
+    return NULL;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_termo — multiplicação e divisão
-// -----------------------------------------------------------------------------
-int analisar_termo(Parser *parser){
-    if(parser->em_recuperacao) return 0;
+ASTNode *analisar_termo(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!analisar_fator(parser)) return 0;
+    ASTNode *left = analisar_fator(parser);
+    if(!left) return NULL;
 
     while(parser->current_token.type == TOKEN_MULT ||
           parser->current_token.type == TOKEN_DIV){
-
         TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
         consumir_token(parser, op);
 
-        if(!analisar_fator(parser)) return 0;
+        ASTNode *right = analisar_fator(parser);
+        if(!right) return NULL;
+
+        ASTNode *binary = ast_new_node(AST_BINARY_EXPR, line, column);
+        binary->value_type = op;
+        binary->left = left;
+        binary->right = right;
+        left = binary;
     }
 
-    return 1;
+    return left;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_expressao — adição e subtração
-// -----------------------------------------------------------------------------
-int analisar_expressao(Parser *parser){
-    if(parser->em_recuperacao) return 0;
+ASTNode *analisar_expressao(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!analisar_termo(parser)) return 0;
+    ASTNode *left = analisar_termo(parser);
+    if(!left) return NULL;
 
     while(parser->current_token.type == TOKEN_PLUS ||
           parser->current_token.type == TOKEN_MINUS){
-
         TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
         consumir_token(parser, op);
 
-        if(!analisar_termo(parser)) return 0;
+        ASTNode *right = analisar_termo(parser);
+        if(!right) return NULL;
+
+        ASTNode *binary = ast_new_node(AST_BINARY_EXPR, line, column);
+        binary->value_type = op;
+        binary->left = left;
+        binary->right = right;
+        left = binary;
     }
 
-    return 1;
+    return left;
 }
 
-// =============================================================================
-//  CONDIÇÕES
-//  Também retornam int para que if/while/for possam recuperar corretamente.
-// =============================================================================
+ASTNode *analisar_condicao_relacional(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    ASTNode *left = analisar_expressao(parser);
+    if(!left) return NULL;
+
+    if(token_eh_operador_relacional(parser->current_token.type)){
+        TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
+        consumir_token(parser, op);
+
+        ASTNode *right = analisar_expressao(parser);
+        if(!right) return NULL;
+
+        ASTNode *binary = ast_new_node(AST_BINARY_EXPR, line, column);
+        binary->value_type = op;
+        binary->left = left;
+        binary->right = right;
+        return binary;
+    }
+
+    return left;
+}
+
+ASTNode *analisar_condicao(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    ASTNode *left = analisar_condicao_relacional(parser);
+    if(!left) return NULL;
+
+    while(parser->current_token.type == TOKEN_AND ||
+          parser->current_token.type == TOKEN_OR){
+        TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
+        consumir_token(parser, op);
+
+        ASTNode *right = analisar_condicao_relacional(parser);
+        if(!right) return NULL;
+
+        ASTNode *binary = ast_new_node(AST_BINARY_EXPR, line, column);
+        binary->value_type = op;
+        binary->left = left;
+        binary->right = right;
+        left = binary;
+    }
+
+    return left;
+}
 
 void analisar_operador_relacional(Parser *parser){
     if(token_eh_operador_relacional(parser->current_token.type)){
@@ -367,544 +408,554 @@ void analisar_operador_relacional(Parser *parser){
     }
 }
 
-int analisar_condicao_relacional(Parser *parser){
-    if(parser->em_recuperacao) return 0;
+ASTNode *analisar_declaracao(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!analisar_expressao(parser)) return 0;
-
-    if(token_eh_operador_relacional(parser->current_token.type)){
-        analisar_operador_relacional(parser);
-        return analisar_expressao(parser);
-    }
-
-    return 1;
-}
-
-int analisar_condicao(Parser *parser){
-    if(parser->em_recuperacao) return 0;
-
-    if(!analisar_condicao_relacional(parser)) return 0;
-
-    while(parser->current_token.type == TOKEN_AND ||
-          parser->current_token.type == TOKEN_OR){
-
-        TokenType op = parser->current_token.type;
-        consumir_token(parser, op);
-
-        if(!analisar_condicao_relacional(parser)) return 0;
-    }
-
-    return 1;
-}
-
-// =============================================================================
-//  COMANDOS — void porque são retomados pelo loop de analisar_lista_de_comandos
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// analisar_declaracao
-// -----------------------------------------------------------------------------
-void analisar_declaracao(Parser *parser){
-    if(parser->em_recuperacao) return;
-
+    TokenType declared_type = parser->current_token.type;
     if(!analisar_tipo(parser)){
         sincronizar_parser(parser);
-        return;
+        return NULL;
     }
 
-    if(!consumir_token(parser, TOKEN_ID)){
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado na declaração");
         sincronizar_parser(parser);
-        return;
+        return NULL;
     }
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    char *name = strdup(parser->current_token.lexema);
+    consumir_token(parser, TOKEN_ID);
+
+    ASTNode *decl = ast_new_node(AST_DECLARATION, line, column);
+    decl->name = name;
+    decl->value_type = declared_type;
 
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
-
-        if(!analisar_expressao(parser)){
-            // Expressão inválida: vai até o ';' para retomar no próximo comando
+        decl->left = analisar_expressao(parser);
+        if(!decl->left){
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
-            return;
+            return decl;
         }
     }
 
     if(!consumir_token(parser, TOKEN_SEMICOLON)){
         parser->em_recuperacao = 0;
-        return;
+        return decl;
     }
+
+    return decl;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_declaracao_sem_ponto_virgula  (usada dentro do for)
-// -----------------------------------------------------------------------------
-void analisar_declaracao_sem_ponto_virgula(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_declaracao_sem_ponto_virgula(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!analisar_tipo(parser)) return;
+    TokenType declared_type = parser->current_token.type;
+    if(!analisar_tipo(parser)) return NULL;
 
-    if(!consumir_token(parser, TOKEN_ID)) return;
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado na declaração");
+        return NULL;
+    }
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    char *name = strdup(parser->current_token.lexema);
+    consumir_token(parser, TOKEN_ID);
+
+    ASTNode *decl = ast_new_node(AST_DECLARATION, line, column);
+    decl->name = name;
+    decl->value_type = declared_type;
 
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
-        analisar_expressao(parser);
+        decl->left = analisar_expressao(parser);
     }
+
+    return decl;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_atribuicao
-// -----------------------------------------------------------------------------
-void analisar_atribuicao(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_atribuicao(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!consumir_token(parser, TOKEN_ID))  { sincronizar_parser(parser); return; }
-    if(!consumir_token(parser, TOKEN_ASSIGN)){ sincronizar_parser(parser); return; }
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado na atribuição");
+        sincronizar_parser(parser);
+        return NULL;
+    }
 
-    if(!analisar_expressao(parser)){
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    char *name = strdup(parser->current_token.lexema);
+    consumir_token(parser, TOKEN_ID);
+    consumir_token(parser, TOKEN_ASSIGN);
+
+    ASTNode *value = analisar_expressao(parser);
+    ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
+    assign->name = name;
+    assign->left = value;
+
+    if(!value){
         sincronizar_ate(parser, TOKEN_SEMICOLON);
         consumir_token(parser, TOKEN_SEMICOLON);
-        return;
+        return assign;
     }
 
     consumir_token(parser, TOKEN_SEMICOLON);
+    return assign;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_atribuicao_sem_ponto_virgula  (usada dentro do for)
-// -----------------------------------------------------------------------------
-void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_atribuicao_sem_ponto_virgula(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!consumir_token(parser, TOKEN_ID))   return;
-    if(!consumir_token(parser, TOKEN_ASSIGN)) return;
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado na atribuição");
+        return NULL;
+    }
 
-    analisar_expressao(parser);
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    char *name = strdup(parser->current_token.lexema);
+    consumir_token(parser, TOKEN_ID);
+    consumir_token(parser, TOKEN_ASSIGN);
+
+    ASTNode *value = analisar_expressao(parser);
+    ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
+    assign->name = name;
+    assign->left = value;
+    return assign;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_if
-// -----------------------------------------------------------------------------
-void analisar_if(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_incremento_decremento(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    consumir_token(parser, TOKEN_IF);
+    TokenType op = parser->current_token.type;
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, op);
 
-    if(!consumir_token(parser, TOKEN_LPAREN)){
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Esperado identificador após ++ ou --");
+        return NULL;
+    }
+
+    ASTNode *operand = ast_new_identifier(parser->current_token.lexema,
+                                         parser->current_token.line,
+                                         parser->current_token.column);
+    consumir_token(parser, TOKEN_ID);
+
+    ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
+    node->value_type = op;
+    node->left = operand;
+    return node;
+}
+
+ASTNode *analisar_comando_iniciado_por_id(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado no comando");
         sincronizar_parser(parser);
-        return;
+        return NULL;
     }
 
-    if(!analisar_condicao(parser)){
-        sincronizar_ate(parser, TOKEN_RPAREN);
-    }
-
-    if(!consumir_token(parser, TOKEN_RPAREN)){
-        if(parser->current_token.type == TOKEN_LBRACE){
-            parser->em_recuperacao = 0;
-        } else {
-            sincronizar_ate(parser, TOKEN_RPAREN);
-            if(parser->current_token.type == TOKEN_RPAREN){
-                consumir_token(parser, TOKEN_RPAREN);
-            } else {
-                sincronizar_parser(parser);
-                return;
-            }
-        }
-    }
-
-    analisar_comando(parser);
-
-    if(parser->current_token.type == TOKEN_ELSE){
-        consumir_token(parser, TOKEN_ELSE);
-        analisar_comando(parser);
-    }
-}
-
-// -----------------------------------------------------------------------------
-// analisar_while
-// -----------------------------------------------------------------------------
-void analisar_while(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    consumir_token(parser, TOKEN_WHILE);
-
-    if(!consumir_token(parser, TOKEN_LPAREN)){
-        sincronizar_parser(parser);
-        return;
-    }
-
-    if(!analisar_condicao(parser)){
-        sincronizar_ate(parser, TOKEN_RPAREN);
-    }
-
-    if(!consumir_token(parser, TOKEN_RPAREN)){
-        if(parser->current_token.type == TOKEN_LBRACE){
-            parser->em_recuperacao = 0;
-        } else {
-            sincronizar_ate(parser, TOKEN_RPAREN);
-            if(parser->current_token.type == TOKEN_RPAREN){
-                consumir_token(parser, TOKEN_RPAREN);
-            } else {
-                sincronizar_parser(parser);
-                return;
-            }
-        }
-    }
-
-    analisar_comando(parser);
-}
-
-// -----------------------------------------------------------------------------
-// analisar_inicializacao_for
-// -----------------------------------------------------------------------------
-void analisar_inicializacao_for(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    if(token_eh_tipo(parser->current_token.type)){
-        analisar_declaracao_sem_ponto_virgula(parser);
-
-    } else if(parser->current_token.type == TOKEN_ID){
-        analisar_atribuicao_sem_ponto_virgula(parser);
-
-    } else {
-        erro_de_sintaxe(parser, "Inicialização inválida no for");
-    }
-}
-
-// -----------------------------------------------------------------------------
-// analisar_expressao_de_incremento  (terceiro campo do for)
-// -----------------------------------------------------------------------------
-void analisar_expressao_de_incremento(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    if(parser->current_token.type == TOKEN_ID){
-        consumir_token(parser, TOKEN_ID);
-
-        if(parser->current_token.type == TOKEN_INCREMENT){
-            consumir_token(parser, TOKEN_INCREMENT);
-
-        } else if(parser->current_token.type == TOKEN_DECREMENT){
-            consumir_token(parser, TOKEN_DECREMENT);
-
-        } else if(parser->current_token.type == TOKEN_ASSIGN){
-            consumir_token(parser, TOKEN_ASSIGN);
-            analisar_expressao(parser);
-
-        } else {
-            erro_de_sintaxe(parser,
-                "Esperado ++, -- ou = na parte de incremento do for");
-        }
-
-    } else if(parser->current_token.type == TOKEN_INCREMENT){
-        consumir_token(parser, TOKEN_INCREMENT);
-        consumir_token(parser, TOKEN_ID);
-
-    } else if(parser->current_token.type == TOKEN_DECREMENT){
-        consumir_token(parser, TOKEN_DECREMENT);
-        consumir_token(parser, TOKEN_ID);
-
-    } else {
-        erro_de_sintaxe(parser, "Parte de incremento do for inválida");
-    }
-}
-
-// -----------------------------------------------------------------------------
-// analisar_for
-// -----------------------------------------------------------------------------
-void analisar_for(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    consumir_token(parser, TOKEN_FOR);
-
-    if(!consumir_token(parser, TOKEN_LPAREN)){
-        sincronizar_parser(parser);
-        return;
-    }
-
-    // Parte 1: inicialização
-    analisar_inicializacao_for(parser);
-    if(parser->em_recuperacao){
-        sincronizar_ate(parser, TOKEN_SEMICOLON);
-    }
-    consumir_token(parser, TOKEN_SEMICOLON);
-
-    // Parte 2: condição
-    if(!analisar_condicao(parser)){
-        sincronizar_ate(parser, TOKEN_SEMICOLON);
-    }
-    consumir_token(parser, TOKEN_SEMICOLON);
-
-    // Parte 3: incremento
-    analisar_expressao_de_incremento(parser);
-    if(parser->em_recuperacao){
-        sincronizar_ate(parser, TOKEN_RPAREN);
-    }
-
-    if(!consumir_token(parser, TOKEN_RPAREN)){
-        if(parser->current_token.type == TOKEN_LBRACE){
-            parser->em_recuperacao = 0;
-        } else {
-            sincronizar_ate(parser, TOKEN_RPAREN);
-            if(parser->current_token.type == TOKEN_RPAREN){
-                consumir_token(parser, TOKEN_RPAREN);
-            } else {
-                sincronizar_parser(parser);
-                return;
-            }
-        }
-    }
-
-    analisar_comando(parser);
-}
-
-// -----------------------------------------------------------------------------
-// analisar_return
-// -----------------------------------------------------------------------------
-void analisar_return(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    consumir_token(parser, TOKEN_RETURN);
-
-    if(parser->current_token.type != TOKEN_SEMICOLON){
-        if(!analisar_expressao(parser)){
-            sincronizar_ate(parser, TOKEN_SEMICOLON);
-            consumir_token(parser, TOKEN_SEMICOLON);
-            return;
-        }
-    }
-
-    consumir_token(parser, TOKEN_SEMICOLON);
-}
-
-// -----------------------------------------------------------------------------
-// analisar_break / analisar_continue
-// -----------------------------------------------------------------------------
-void analisar_break(Parser *parser){
-    if(parser->em_recuperacao) return;
-    consumir_token(parser, TOKEN_BREAK);
-    consumir_token(parser, TOKEN_SEMICOLON);
-}
-
-void analisar_continue(Parser *parser){
-    if(parser->em_recuperacao) return;
-    consumir_token(parser, TOKEN_CONTINUE);
-    consumir_token(parser, TOKEN_SEMICOLON);
-}
-
-// -----------------------------------------------------------------------------
-// analisar_incremento_decremento  (prefixo: ++x; --x;)
-// -----------------------------------------------------------------------------
-void analisar_incremento_decremento(Parser *parser){
-    if(parser->em_recuperacao) return;
-
-    if(parser->current_token.type == TOKEN_INCREMENT){
-        consumir_token(parser, TOKEN_INCREMENT);
-        consumir_token(parser, TOKEN_ID);
-        consumir_token(parser, TOKEN_SEMICOLON);
-
-    } else if(parser->current_token.type == TOKEN_DECREMENT){
-        consumir_token(parser, TOKEN_DECREMENT);
-        consumir_token(parser, TOKEN_ID);
-        consumir_token(parser, TOKEN_SEMICOLON);
-
-    } else {
-        erro_de_sintaxe(parser, "Esperado ++ ou -- no início do comando");
-    }
-}
-
-// -----------------------------------------------------------------------------
-// analisar_comando_iniciado_por_id  (atribuição, chamada, x++, x--)
-// -----------------------------------------------------------------------------
-void analisar_comando_iniciado_por_id(Parser *parser){
-    if(parser->em_recuperacao) return;
-
+    char *name = strdup(parser->current_token.lexema);
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
     consumir_token(parser, TOKEN_ID);
 
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
-
-        if(!analisar_expressao(parser)){
+        ASTNode *value = analisar_expressao(parser);
+        ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
+        assign->name = name;
+        assign->left = value;
+        if(!value){
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
-            return;
+            return assign;
         }
-
         consumir_token(parser, TOKEN_SEMICOLON);
+        return assign;
 
     } else if(parser->current_token.type == TOKEN_LPAREN){
-        consumir_token(parser, TOKEN_LPAREN);
-
-        if(parser->current_token.type != TOKEN_RPAREN){
-            if(!analisar_lista_de_argumentos(parser)){
-                sincronizar_ate(parser, TOKEN_RPAREN);
-            }
+        ASTNode *call = analisar_chamada_funcao(parser, name, line, column);
+        if(!call){
+            free(name);
+            sincronizar_ate(parser, TOKEN_SEMICOLON);
+            consumir_token(parser, TOKEN_SEMICOLON);
+            return NULL;
         }
-
-        consumir_token(parser, TOKEN_RPAREN);
         consumir_token(parser, TOKEN_SEMICOLON);
+        return call;
 
-    } else if(parser->current_token.type == TOKEN_INCREMENT){
-        consumir_token(parser, TOKEN_INCREMENT);
+    } else if(parser->current_token.type == TOKEN_INCREMENT ||
+              parser->current_token.type == TOKEN_DECREMENT){
+        TokenType op = parser->current_token.type;
+        int op_line = parser->current_token.line;
+        int op_column = parser->current_token.column;
+        consumir_token(parser, op);
+        ASTNode *operand = ast_new_identifier(name, line, column);
+        ASTNode *node = ast_new_node(AST_UNARY_EXPR, op_line, op_column);
+        node->value_type = op;
+        node->left = operand;
         consumir_token(parser, TOKEN_SEMICOLON);
-
-    } else if(parser->current_token.type == TOKEN_DECREMENT){
-        consumir_token(parser, TOKEN_DECREMENT);
-        consumir_token(parser, TOKEN_SEMICOLON);
+        return node;
 
     } else {
         erro_de_sintaxe(parser,
             "Esperado atribuição, chamada de função, ++ ou -- após o identificador");
         sincronizar_parser(parser);
+        free(name);
+        return NULL;
     }
 }
 
-// -----------------------------------------------------------------------------
-// analisar_comando — dispatcher central de comandos
-// -----------------------------------------------------------------------------
-void analisar_comando(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_comando(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
     if(token_eh_tipo(parser->current_token.type)){
-        analisar_declaracao(parser);
+        return analisar_declaracao(parser);
 
     } else if(parser->current_token.type == TOKEN_INCREMENT ||
               parser->current_token.type == TOKEN_DECREMENT){
-        analisar_incremento_decremento(parser);
+        ASTNode *node = analisar_incremento_decremento(parser);
+        consumir_token(parser, TOKEN_SEMICOLON);
+        return node;
 
     } else if(parser->current_token.type == TOKEN_ID){
-        analisar_comando_iniciado_por_id(parser);
+        return analisar_comando_iniciado_por_id(parser);
 
     } else if(parser->current_token.type == TOKEN_LBRACE){
-        analisar_bloco(parser);
+        return analisar_bloco(parser);
 
     } else if(parser->current_token.type == TOKEN_IF){
-        analisar_if(parser);
+        return analisar_if(parser);
 
     } else if(parser->current_token.type == TOKEN_WHILE){
-        analisar_while(parser);
+        return analisar_while(parser);
 
     } else if(parser->current_token.type == TOKEN_FOR){
-        analisar_for(parser);
+        return analisar_for(parser);
 
     } else if(parser->current_token.type == TOKEN_RETURN){
-        analisar_return(parser);
+        return analisar_return(parser);
 
     } else if(parser->current_token.type == TOKEN_BREAK){
-        analisar_break(parser);
+        return analisar_break(parser);
 
     } else if(parser->current_token.type == TOKEN_CONTINUE){
-        analisar_continue(parser);
+        return analisar_continue(parser);
 
     } else {
         erro_de_sintaxe(parser, "Comando inválido ou não suportado");
         sincronizar_parser(parser);
+        return NULL;
     }
 }
 
-// =============================================================================
-//  BLOCOS E FUNÇÕES
-// =============================================================================
+ASTNode *analisar_lista_de_comandos(Parser *parser){
+    ASTNode *list = NULL;
 
-// -----------------------------------------------------------------------------
-// analisar_lista_de_comandos
-// O fallback de sincronização aqui garante que, se alguma função de comando
-// esqueceu de sincronizar antes de retornar, o loop não trava.
-// -----------------------------------------------------------------------------
-void analisar_lista_de_comandos(Parser *parser){
     while(parser->current_token.type != TOKEN_RBRACE &&
           parser->current_token.type != TOKEN_EOF){
 
-        analisar_comando(parser);
+        ASTNode *command = analisar_comando(parser);
+        if(command) list = ast_append(list, command);
 
-        // Fallback: se ainda estamos em recuperação após o comando,
-        // sincroniza aqui para não travar o loop.
         if(parser->em_recuperacao){
             sincronizar_parser(parser);
         }
     }
+
+    return list;
 }
 
-void analisar_bloco(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_bloco(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
     if(!consumir_token(parser, TOKEN_LBRACE)){
         sincronizar_parser(parser);
-        return;
+        return NULL;
     }
 
-    analisar_lista_de_comandos(parser);
-
+    ASTNode *block = ast_new_node(AST_BLOCK, line, column);
+    block->left = analisar_lista_de_comandos(parser);
     consumir_token(parser, TOKEN_RBRACE);
+    return block;
 }
 
-void analisar_parametro(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_parametro(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
+    TokenType declared_type = parser->current_token.type;
     if(!analisar_tipo(parser)){
         sincronizar_ate(parser, TOKEN_RPAREN);
-        return;
+        return NULL;
     }
 
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado no parâmetro");
+        sincronizar_ate(parser, TOKEN_RPAREN);
+        return NULL;
+    }
+
+    ASTNode *param = ast_new_node(AST_PARAMETER,
+                                 parser->current_token.line,
+                                 parser->current_token.column);
+    param->name = strdup(parser->current_token.lexema);
+    param->value_type = declared_type;
     consumir_token(parser, TOKEN_ID);
+    return param;
 }
 
-void analisar_lista_de_parametros(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_lista_de_parametros(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    analisar_parametro(parser);
+    ASTNode *list = analisar_parametro(parser);
+    if(!list) return NULL;
 
     while(parser->current_token.type == TOKEN_COMMA){
         consumir_token(parser, TOKEN_COMMA);
-        analisar_parametro(parser);
+        ASTNode *param = analisar_parametro(parser);
+        if(param) list = ast_append(list, param);
     }
+
+    return list;
 }
 
-void analisar_funcao(Parser *parser){
-    if(parser->em_recuperacao) return;
+ASTNode *analisar_if(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-    if(!analisar_tipo(parser)){
-        sincronizar_parser(parser);
-        return;
-    }
-
-    if(!consumir_token(parser, TOKEN_ID)){
-        sincronizar_parser(parser);
-        return;
-    }
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_IF);
 
     if(!consumir_token(parser, TOKEN_LPAREN)){
         sincronizar_parser(parser);
-        return;
+        return NULL;
     }
 
-    if(parser->current_token.type != TOKEN_RPAREN){
-        analisar_lista_de_parametros(parser);
-        if(parser->em_recuperacao){
-            sincronizar_ate(parser, TOKEN_RPAREN);
+    ASTNode *condition = analisar_condicao(parser);
+    if(parser->em_recuperacao){
+        sincronizar_ate(parser, TOKEN_RPAREN);
+    }
+    consumir_token(parser, TOKEN_RPAREN);
+
+    ASTNode *then_branch = analisar_comando(parser);
+    ASTNode *else_branch = NULL;
+    if(parser->current_token.type == TOKEN_ELSE){
+        consumir_token(parser, TOKEN_ELSE);
+        else_branch = analisar_comando(parser);
+    }
+
+    ASTNode *node = ast_new_node(AST_IF, line, column);
+    node->left = condition;
+    node->right = then_branch;
+    node->third = else_branch;
+    return node;
+}
+
+ASTNode *analisar_while(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_WHILE);
+
+    if(!consumir_token(parser, TOKEN_LPAREN)){
+        sincronizar_parser(parser);
+        return NULL;
+    }
+
+    ASTNode *condition = analisar_condicao(parser);
+    if(parser->em_recuperacao){
+        sincronizar_ate(parser, TOKEN_RPAREN);
+    }
+    consumir_token(parser, TOKEN_RPAREN);
+
+    ASTNode *body = analisar_comando(parser);
+    ASTNode *node = ast_new_node(AST_WHILE, line, column);
+    node->left = condition;
+    node->right = body;
+    return node;
+}
+
+ASTNode *analisar_inicializacao_for(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    if(token_eh_tipo(parser->current_token.type)){
+        return analisar_declaracao_sem_ponto_virgula(parser);
+
+    } else if(parser->current_token.type == TOKEN_ID){
+        return analisar_atribuicao_sem_ponto_virgula(parser);
+
+    } else {
+        erro_de_sintaxe(parser, "Inicialização inválida no for");
+        return NULL;
+    }
+}
+
+ASTNode *analisar_expressao_de_incremento(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    if(parser->current_token.type == TOKEN_ID){
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
+        char *name = strdup(parser->current_token.lexema);
+        consumir_token(parser, TOKEN_ID);
+
+        if(parser->current_token.type == TOKEN_INCREMENT ||
+           parser->current_token.type == TOKEN_DECREMENT){
+            TokenType op = parser->current_token.type;
+            consumir_token(parser, op);
+            ASTNode *operand = ast_new_identifier(name, line, column);
+            free(name);
+            ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
+            node->value_type = op;
+            node->left = operand;
+            return node;
+
+        } else if(parser->current_token.type == TOKEN_ASSIGN){
+            consumir_token(parser, TOKEN_ASSIGN);
+            ASTNode *expr = analisar_expressao(parser);
+            ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
+            assign->name = name;
+            assign->left = expr;
+            return assign;
         }
+
+        free(name);
+        erro_de_sintaxe(parser, "Esperado ++, -- ou = na parte de incremento do for");
+        return NULL;
+
+    } else if(parser->current_token.type == TOKEN_INCREMENT ||
+              parser->current_token.type == TOKEN_DECREMENT){
+        TokenType op = parser->current_token.type;
+        int line = parser->current_token.line;
+        int column = parser->current_token.column;
+        consumir_token(parser, op);
+
+        if(parser->current_token.type != TOKEN_ID){
+            erro_de_sintaxe(parser, "Esperado identificador após ++/--");
+            return NULL;
+        }
+
+        ASTNode *operand = ast_new_identifier(parser->current_token.lexema,
+                                             parser->current_token.line,
+                                             parser->current_token.column);
+        consumir_token(parser, TOKEN_ID);
+
+        ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
+        node->value_type = op;
+        node->left = operand;
+        return node;
+
+    } else {
+        return NULL;
+    }
+}
+
+ASTNode *analisar_for(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_FOR);
+
+    if(!consumir_token(parser, TOKEN_LPAREN)){
+        sincronizar_parser(parser);
+        return NULL;
+    }
+
+    ASTNode *init = analisar_inicializacao_for(parser);
+    if(parser->em_recuperacao){
+        sincronizar_ate(parser, TOKEN_SEMICOLON);
+    }
+    consumir_token(parser, TOKEN_SEMICOLON);
+
+    ASTNode *condition = analisar_condicao(parser);
+    if(parser->em_recuperacao){
+        sincronizar_ate(parser, TOKEN_SEMICOLON);
+    }
+    consumir_token(parser, TOKEN_SEMICOLON);
+
+    ASTNode *increment = analisar_expressao_de_incremento(parser);
+    if(parser->em_recuperacao){
+        sincronizar_ate(parser, TOKEN_RPAREN);
     }
 
     if(!consumir_token(parser, TOKEN_RPAREN)){
-        sincronizar_ate(parser, TOKEN_LBRACE);
+        if(parser->current_token.type == TOKEN_LBRACE){
+            parser->em_recuperacao = 0;
+        } else {
+            sincronizar_ate(parser, TOKEN_RPAREN);
+            if(parser->current_token.type == TOKEN_RPAREN){
+                consumir_token(parser, TOKEN_RPAREN);
+            } else {
+                sincronizar_parser(parser);
+                return NULL;
+            }
+        }
     }
 
-    analisar_bloco(parser);
+    ASTNode *body = analisar_comando(parser);
+    ASTNode *node = ast_new_node(AST_FOR, line, column);
+    node->left = init;
+    node->right = condition;
+    node->third = increment;
+    node->extra = body;
+    return node;
 }
 
-// -----------------------------------------------------------------------------
-// analisar_lista_de_funcoes
-// Mesmo fallback do loop de comandos: garante retomada após erro em função.
-//
-// ATENÇÃO — loop infinito sem a guarda de TOKEN_RBRACE:
-//   sincronizar_parser para em '}' sem consumir (correto dentro de blocos).
-//   No escopo global não há bloco pai aguardando esse '}', então o loop
-//   chamaria analisar_funcao indefinidamente sobre o mesmo token.
-//   Solução: qualquer '}' encontrado no escopo global é espúrio — reporta
-//   o erro e descarta o token antes de continuar.
-// -----------------------------------------------------------------------------
-void analisar_lista_de_funcoes(Parser *parser){
-    while(parser->current_token.type != TOKEN_EOF){
+ASTNode *analisar_return(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-        // Chave de fechamento solta no escopo global — descarta e reporta.
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_RETURN);
+
+    ASTNode *node = ast_new_node(AST_RETURN, line, column);
+    if(parser->current_token.type != TOKEN_SEMICOLON){
+        node->left = analisar_expressao(parser);
+        if(!node->left){
+            sincronizar_ate(parser, TOKEN_SEMICOLON);
+        }
+    }
+
+    consumir_token(parser, TOKEN_SEMICOLON);
+    return node;
+}
+
+ASTNode *analisar_break(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_BREAK);
+    consumir_token(parser, TOKEN_SEMICOLON);
+    return ast_new_node(AST_BREAK, line, column);
+}
+
+ASTNode *analisar_continue(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    consumir_token(parser, TOKEN_CONTINUE);
+    consumir_token(parser, TOKEN_SEMICOLON);
+    return ast_new_node(AST_CONTINUE, line, column);
+}
+
+ASTNode *analisar_lista_de_funcoes(Parser *parser){
+    ASTNode *functions = NULL;
+
+    while(parser->current_token.type != TOKEN_EOF){
         if(parser->current_token.type == TOKEN_RBRACE){
             erro_de_sintaxe(parser,
                 "Chave de fechamento inesperada no escopo global");
@@ -913,41 +964,71 @@ void analisar_lista_de_funcoes(Parser *parser){
             continue;
         }
 
-        analisar_funcao(parser);
+        ASTNode *func = analisar_funcao(parser);
+        if(func) functions = ast_append(functions, func);
 
         if(parser->em_recuperacao){
             sincronizar_parser(parser);
-
-            // sincronizar_parser para em '}' sem consumir.
-            // No escopo global essa chave é espúria — descarta.
             if(parser->current_token.type == TOKEN_RBRACE){
                 avancar_token(parser);
                 parser->em_recuperacao = 0;
             }
         }
     }
+
+    return functions;
 }
 
-void analisar_programa(Parser *parser){
-    analisar_lista_de_funcoes(parser);
-    consumir_token(parser, TOKEN_EOF);
-}
+ASTNode *analisar_funcao(Parser *parser){
+    if(parser->em_recuperacao) return NULL;
 
-// -----------------------------------------------------------------------------
-// analisar_chamada_funcao — utilitário (usado quando a chamada aparece
-// como expressão isolada já com o ID consumido pelo chamador)
-// -----------------------------------------------------------------------------
-void analisar_chamada_funcao(Parser *parser){
-    if(parser->em_recuperacao) return;
+    TokenType return_type = parser->current_token.type;
+    if(!analisar_tipo(parser)){
+        sincronizar_parser(parser);
+        return NULL;
+    }
 
+    if(parser->current_token.type != TOKEN_ID){
+        erro_de_sintaxe(parser, "Identificador esperado no nome da função");
+        sincronizar_parser(parser);
+        return NULL;
+    }
+
+    int line = parser->current_token.line;
+    int column = parser->current_token.column;
+    char *name = strdup(parser->current_token.lexema);
     consumir_token(parser, TOKEN_ID);
-    consumir_token(parser, TOKEN_LPAREN);
 
+    if(!consumir_token(parser, TOKEN_LPAREN)){
+        sincronizar_parser(parser);
+        free(name);
+        return NULL;
+    }
+
+    ASTNode *params = NULL;
     if(parser->current_token.type != TOKEN_RPAREN){
-        if(!analisar_lista_de_argumentos(parser)){
+        params = analisar_lista_de_parametros(parser);
+        if(parser->em_recuperacao){
             sincronizar_ate(parser, TOKEN_RPAREN);
         }
     }
 
     consumir_token(parser, TOKEN_RPAREN);
+    ASTNode *body = analisar_bloco(parser);
+
+    ASTNode *func = ast_new_node(AST_FUNCTION_DECL, line, column);
+    func->name = name;
+    func->value_type = return_type;
+    func->left = params;
+    func->right = body;
+    return func;
+}
+
+ASTNode *analisar_programa(Parser *parser){
+    ASTNode *root = ast_new_node(AST_PROGRAM,
+                                parser->current_token.line,
+                                parser->current_token.column);
+    root->left = analisar_lista_de_funcoes(parser);
+    consumir_token(parser, TOKEN_EOF);
+    return root;
 }
