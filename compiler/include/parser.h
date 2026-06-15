@@ -10,9 +10,12 @@
 #define GREEN   "\x1b[32m"
 #define RESET   "\x1b[0m"
 
+typedef struct Scope Scope;
+
 typedef struct {
     Lexer *lexer;
     Token current_token;
+    Scope *current_scope;
     int quantidade_erros;
     int em_recuperacao;
 } Parser;

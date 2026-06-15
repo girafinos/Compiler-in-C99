@@ -5,12 +5,208 @@
 #include <string.h>
 
 // =============================================================================
+//  ANALISADOR SEMÂNTICO
+// =============================================================================
+// 
+// Implementação de análise semântica com suporte a:
+//  1. Verificação de tipos (int, char, void)
+//  2. Rastreamento de declaração de variáveis
+//  3. Detecção de uso sem inicialização
+//  4. Verificação de variáveis não utilizadas
+//  5. Gerenciamento de escopos (função/bloco)
+//  6. Validação de atribuições com compatibilidade de tipos
+//
+// A análise opera simultaneamente com a análise sintática,
+// permitindo detecção precoce de erros semânticos.
+//
+// Estrutura Symbol: Mantém informações sobre uma variável
+//   - name: nome da variável
+//   - type: tipo (TOKEN_INT, TOKEN_CHAR, TOKEN_VOID)
+//   - initialized: 1 se inicializada, 0 caso contrário
+//   - used: 1 se usada, 0 caso contrário
+//   - line, column: localização na fonte
+//
+// Estrutura Scope: Representa um escopo (função, bloco)
+//   - symbols: lista encadeada de símbolos neste escopo
+//   - parent: escopo pai (permite busca em escopos externos)
+//
+
+typedef struct Symbol {
+    char *name;
+    TokenType type;
+    int initialized;
+    int used;
+    int line;
+    int column;
+    struct Symbol *next;
+} Symbol;
+
+struct Scope {
+    Symbol *symbols;
+    Scope *parent;
+};
+
+static Scope *criar_escopo(Scope *parent){
+    Scope *scope = malloc(sizeof(Scope));
+    if(!scope) return NULL;
+    scope->symbols = NULL;
+    scope->parent = parent;
+    return scope;
+}
+
+static void liberar_escopo(Scope *scope){
+    Symbol *symbol = scope->symbols;
+    while(symbol){
+        Symbol *next = symbol->next;
+        free(symbol->name);
+        free(symbol);
+        symbol = next;
+    }
+    free(scope);
+}
+
+static void avisar_variavel_nao_usada(Symbol *symbol){
+    if(symbol->used) return;
+    printf(YELLOW "[ AVISO ] Variável não usada \"%s\" declarada em linha %d, coluna %d\n" RESET,
+           symbol->name, symbol->line, symbol->column);
+}
+
+static void entrar_escopo(Parser *parser){
+    Scope *scope = criar_escopo(parser->current_scope);
+    if(!scope) return;
+    parser->current_scope = scope;
+}
+
+static void sair_escopo(Parser *parser){
+    if(!parser->current_scope) return;
+    Scope *scope = parser->current_scope;
+    for(Symbol *symbol = scope->symbols; symbol; symbol = symbol->next){
+        avisar_variavel_nao_usada(symbol);
+    }
+    parser->current_scope = scope->parent;
+    liberar_escopo(scope);
+}
+
+static Symbol *busca_simbolo_escopo(Scope *scope, const char *name){
+    for(Symbol *symbol = scope->symbols; symbol; symbol = symbol->next){
+        if(strcmp(symbol->name, name) == 0) return symbol;
+    }
+    return NULL;
+}
+
+static Symbol *buscar_simbolo(Parser *parser, const char *name){
+    for(Scope *scope = parser->current_scope; scope; scope = scope->parent){
+        Symbol *symbol = busca_simbolo_escopo(scope, name);
+        if(symbol) return symbol;
+    }
+    return NULL;
+}
+
+static int erro_semantico(Parser *parser, const char *mensagem, int line, int column){
+    parser->quantidade_erros++;
+    printf("\n");
+    printf(RED "[ ERRO SEMÂNTICO #%d ]\n" RESET, parser->quantidade_erros);
+    printf(YELLOW "Mensagem:\n" RESET);
+    printf("  %s\n\n", mensagem);
+    printf(YELLOW "Localização:\n" RESET);
+    printf("  Linha: %d\n", line);
+    printf("  Coluna: %d\n\n", column);
+    return 0;
+}
+
+
+static Symbol *declarar_variavel(Parser *parser, const char *name, TokenType type,
+                                 int initialized, int line, int column){
+    if(busca_simbolo_escopo(parser->current_scope, name)){
+        char mensagem[200];
+        sprintf(mensagem, "Variável '%s' já declarada neste escopo", name);
+        erro_semantico(parser, mensagem, line, column);
+        return NULL;
+    }
+
+    Symbol *symbol = malloc(sizeof(Symbol));
+    if(!symbol) return NULL;
+    symbol->name = strdup(name);
+    symbol->type = type;
+    symbol->initialized = initialized;
+    symbol->used = 0;
+    symbol->line = line;
+    symbol->column = column;
+    symbol->next = parser->current_scope->symbols;
+    parser->current_scope->symbols = symbol;
+    return symbol;
+}
+
+static void marcar_inicializado(Parser *parser, const char *name){
+    Symbol *symbol = buscar_simbolo(parser, name);
+    if(symbol) symbol->initialized = 1;
+}
+
+static void marcar_usado(Parser *parser, const char *name){
+    Symbol *symbol = buscar_simbolo(parser, name);
+    if(symbol) symbol->used = 1;
+}
+
+static TokenType inferir_tipo_expressao(ASTNode *node){
+    if(!node) return TOKEN_ERROR;
+    switch(node->type){
+        case AST_LITERAL:
+            return node->value_type;
+        case AST_IDENTIFIER:
+            return node->value_type;
+        case AST_UNARY_EXPR:
+            if(node->value_type == TOKEN_NOT) return TOKEN_INT;
+            return inferir_tipo_expressao(node->left);
+        case AST_BINARY_EXPR: {
+            TokenType left = inferir_tipo_expressao(node->left);
+            TokenType right = inferir_tipo_expressao(node->right);
+            if(left == TOKEN_ERROR || right == TOKEN_ERROR) return TOKEN_ERROR;
+            if(node->value_type == TOKEN_AND || node->value_type == TOKEN_OR ||
+               node->value_type == TOKEN_EQ || node->value_type == TOKEN_NEQ ||
+               node->value_type == TOKEN_LT || node->value_type == TOKEN_GT ||
+               node->value_type == TOKEN_LTE || node->value_type == TOKEN_GTE){
+                return TOKEN_INT;
+            }
+            if(left == TOKEN_INT || right == TOKEN_INT) return TOKEN_INT;
+            if(left == TOKEN_CHAR && right == TOKEN_CHAR) return TOKEN_CHAR;
+            return TOKEN_ERROR;
+        }
+        case AST_FUNCTION_CALL:
+            return TOKEN_INT;
+        default:
+            return TOKEN_ERROR;
+    }
+}
+
+static void validar_tipo_atribuicao(Parser *parser, const char *name,
+                                    TokenType dest_type, TokenType expr_type,
+                                    int line, int column){
+    if(dest_type == TOKEN_VOID){
+        erro_semantico(parser, "Atribuição inválida: variável do tipo void", line, column);
+        return;
+    }
+    if(expr_type == TOKEN_ERROR) return;
+    if(expr_type == TOKEN_STRING){
+        if(dest_type != TOKEN_CHAR){
+            char mensagem[200];
+            sprintf(mensagem, "Tipo incompatível: não é possível atribuir string a '%s'", name);
+            erro_semantico(parser, mensagem, line, column);
+        }
+        return;
+    }
+    if(dest_type == TOKEN_CHAR || dest_type == TOKEN_INT){
+        return;
+    }
+}
+
+// =============================================================================
 //  INFRAESTRUTURA DO PARSER
 // =============================================================================
 
 void inicializar_parser(Parser *parser, Lexer *lexer){
     parser->lexer          = lexer;
     parser->current_token  = pegar_prox_token(lexer);
+    parser->current_scope  = criar_escopo(NULL);
     parser->em_recuperacao = 0;
     parser->quantidade_erros = 0;
 }
@@ -262,7 +458,23 @@ ASTNode *analisar_fator(Parser *parser){
             return analisar_chamada_funcao(parser, name, line, column);
         }
 
-        return ast_new_identifier(name, line, column);
+        ASTNode *identifier = ast_new_identifier(name, line, column);
+        Symbol *symbol = buscar_simbolo(parser, name);
+        if(!symbol){
+            char mensagem[200];
+            sprintf(mensagem, "Variável '%s' não declarada", name);
+            erro_semantico(parser, mensagem, line, column);
+            return identifier;
+        }
+
+        marcar_usado(parser, name);
+        if(!symbol->initialized){
+            char mensagem[200];
+            sprintf(mensagem, "Uso de variável '%s' sem inicialização", name);
+            erro_semantico(parser, mensagem, line, column);
+        }
+        identifier->value_type = symbol->type;
+        return identifier;
     }
 
     if(parser->current_token.type == TOKEN_NUM ||
@@ -432,16 +644,23 @@ ASTNode *analisar_declaracao(Parser *parser){
     decl->name = name;
     decl->value_type = declared_type;
 
+    int initialized = 0;
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
         decl->left = analisar_expressao(parser);
-        if(!decl->left){
+        if(decl->left){
+            initialized = 1;
+            TokenType expr_type = inferir_tipo_expressao(decl->left);
+            validar_tipo_atribuicao(parser, name, declared_type, expr_type, line, column);
+        } else {
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
+            declarar_variavel(parser, name, declared_type, initialized, line, column);
             return decl;
         }
     }
 
+    declarar_variavel(parser, name, declared_type, initialized, line, column);
     if(!consumir_token(parser, TOKEN_SEMICOLON)){
         parser->em_recuperacao = 0;
         return decl;
@@ -470,11 +689,17 @@ ASTNode *analisar_declaracao_sem_ponto_virgula(Parser *parser){
     decl->name = name;
     decl->value_type = declared_type;
 
+    int initialized = 0;
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
         decl->left = analisar_expressao(parser);
+        if(decl->left){
+            initialized = 1;
+            TokenType expr_type = inferir_tipo_expressao(decl->left);
+            validar_tipo_atribuicao(parser, name, declared_type, expr_type, line, column);
+        }
     }
-
+    declarar_variavel(parser, name, declared_type, initialized, line, column);
     return decl;
 }
 
@@ -497,6 +722,19 @@ ASTNode *analisar_atribuicao(Parser *parser){
     ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
     assign->name = name;
     assign->left = value;
+
+    Symbol *symbol = buscar_simbolo(parser, name);
+    if(!symbol){
+        char mensagem[200];
+        sprintf(mensagem, "Variável '%s' não declarada", name);
+        erro_semantico(parser, mensagem, line, column);
+    } else {
+        marcar_inicializado(parser, name);
+        if(value){
+            TokenType expr_type = inferir_tipo_expressao(value);
+            validar_tipo_atribuicao(parser, name, symbol->type, expr_type, line, column);
+        }
+    }
 
     if(!value){
         sincronizar_ate(parser, TOKEN_SEMICOLON);
@@ -526,6 +764,20 @@ ASTNode *analisar_atribuicao_sem_ponto_virgula(Parser *parser){
     ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
     assign->name = name;
     assign->left = value;
+
+    Symbol *symbol = buscar_simbolo(parser, name);
+    if(!symbol){
+        char mensagem[200];
+        sprintf(mensagem, "Variável '%s' não declarada", name);
+        erro_semantico(parser, mensagem, line, column);
+    } else {
+        marcar_inicializado(parser, name);
+        if(value){
+            TokenType expr_type = inferir_tipo_expressao(value);
+            validar_tipo_atribuicao(parser, name, symbol->type, expr_type, line, column);
+        }
+    }
+
     return assign;
 }
 
@@ -545,6 +797,15 @@ ASTNode *analisar_incremento_decremento(Parser *parser){
     ASTNode *operand = ast_new_identifier(parser->current_token.lexema,
                                          parser->current_token.line,
                                          parser->current_token.column);
+    Symbol *symbol = buscar_simbolo(parser, operand->name);
+    if(!symbol){
+        char mensagem[200];
+        sprintf(mensagem, "Variável '%s' não declarada", operand->name);
+        erro_semantico(parser, mensagem, operand->line, operand->column);
+    } else {
+        marcar_inicializado(parser, operand->name);
+        marcar_usado(parser, operand->name);
+    }
     consumir_token(parser, TOKEN_ID);
 
     ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
@@ -573,6 +834,20 @@ ASTNode *analisar_comando_iniciado_por_id(Parser *parser){
         ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
         assign->name = name;
         assign->left = value;
+
+        Symbol *symbol = buscar_simbolo(parser, name);
+        if(!symbol){
+            char mensagem[200];
+            sprintf(mensagem, "Variável '%s' não declarada", name);
+            erro_semantico(parser, mensagem, line, column);
+        } else {
+            marcar_inicializado(parser, name);
+            if(value){
+                TokenType expr_type = inferir_tipo_expressao(value);
+                validar_tipo_atribuicao(parser, name, symbol->type, expr_type, line, column);
+            }
+        }
+
         if(!value){
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
@@ -602,6 +877,17 @@ ASTNode *analisar_comando_iniciado_por_id(Parser *parser){
         ASTNode *node = ast_new_node(AST_UNARY_EXPR, op_line, op_column);
         node->value_type = op;
         node->left = operand;
+
+        Symbol *symbol = buscar_simbolo(parser, name);
+        if(!symbol){
+            char mensagem[200];
+            sprintf(mensagem, "Variável '%s' não declarada", name);
+            erro_semantico(parser, mensagem, line, column);
+        } else {
+            marcar_inicializado(parser, name);
+            marcar_usado(parser, name);
+        }
+
         consumir_token(parser, TOKEN_SEMICOLON);
         return node;
 
@@ -684,9 +970,11 @@ ASTNode *analisar_bloco(Parser *parser){
         return NULL;
     }
 
+    entrar_escopo(parser);
     ASTNode *block = ast_new_node(AST_BLOCK, line, column);
     block->left = analisar_lista_de_comandos(parser);
     consumir_token(parser, TOKEN_RBRACE);
+    sair_escopo(parser);
     return block;
 }
 
@@ -711,6 +999,7 @@ ASTNode *analisar_parametro(Parser *parser){
     param->name = strdup(parser->current_token.lexema);
     param->value_type = declared_type;
     consumir_token(parser, TOKEN_ID);
+    declarar_variavel(parser, param->name, declared_type, 1, param->line, param->column);
     return param;
 }
 
@@ -815,6 +1104,15 @@ ASTNode *analisar_expressao_de_incremento(Parser *parser){
             TokenType op = parser->current_token.type;
             consumir_token(parser, op);
             ASTNode *operand = ast_new_identifier(name, line, column);
+            Symbol *symbol = buscar_simbolo(parser, name);
+            if(!symbol){
+                char mensagem[200];
+                sprintf(mensagem, "Variável '%s' não declarada", name);
+                erro_semantico(parser, mensagem, line, column);
+            } else {
+                marcar_inicializado(parser, name);
+                marcar_usado(parser, name);
+            }
             free(name);
             ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
             node->value_type = op;
@@ -827,6 +1125,18 @@ ASTNode *analisar_expressao_de_incremento(Parser *parser){
             ASTNode *assign = ast_new_node(AST_ASSIGNMENT, line, column);
             assign->name = name;
             assign->left = expr;
+            Symbol *symbol = buscar_simbolo(parser, name);
+            if(!symbol){
+                char mensagem[200];
+                sprintf(mensagem, "Variável '%s' não declarada", name);
+                erro_semantico(parser, mensagem, line, column);
+            } else {
+                marcar_inicializado(parser, name);
+                if(expr){
+                    TokenType expr_type = inferir_tipo_expressao(expr);
+                    validar_tipo_atribuicao(parser, name, symbol->type, expr_type, line, column);
+                }
+            }
             return assign;
         }
 
@@ -849,6 +1159,15 @@ ASTNode *analisar_expressao_de_incremento(Parser *parser){
         ASTNode *operand = ast_new_identifier(parser->current_token.lexema,
                                              parser->current_token.line,
                                              parser->current_token.column);
+        Symbol *symbol = buscar_simbolo(parser, operand->name);
+        if(!symbol){
+            char mensagem[200];
+            sprintf(mensagem, "Variável '%s' não declarada", operand->name);
+            erro_semantico(parser, mensagem, operand->line, operand->column);
+        } else {
+            marcar_inicializado(parser, operand->name);
+            marcar_usado(parser, operand->name);
+        }
         consumir_token(parser, TOKEN_ID);
 
         ASTNode *node = ast_new_node(AST_UNARY_EXPR, line, column);
@@ -1005,6 +1324,7 @@ ASTNode *analisar_funcao(Parser *parser){
         return NULL;
     }
 
+    entrar_escopo(parser);
     ASTNode *params = NULL;
     if(parser->current_token.type != TOKEN_RPAREN){
         params = analisar_lista_de_parametros(parser);
@@ -1015,6 +1335,7 @@ ASTNode *analisar_funcao(Parser *parser){
 
     consumir_token(parser, TOKEN_RPAREN);
     ASTNode *body = analisar_bloco(parser);
+    sair_escopo(parser);
 
     ASTNode *func = ast_new_node(AST_FUNCTION_DECL, line, column);
     func->name = name;

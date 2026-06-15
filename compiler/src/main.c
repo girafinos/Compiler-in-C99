@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
     Lexer lexer;
     Parser parser;
 
-    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/test_ast.txt";
+    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/test_semantic.txt";
     char *source = ler_arquivo(filename);
     if (source == NULL) {
         printf("Erro ao abrir o arquivo: %s\n", filename);
