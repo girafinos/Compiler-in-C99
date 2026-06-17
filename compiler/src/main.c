@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
             RESET);
 
         printf(GREEN
-            "ANÁLISE SINTÁTICA CONCLUÍDA\n"
+            "ANÁLISE SINTÁTICA E SEMÂNTICA CONCLUÍDA\n"
             RESET);
 
         printf(GREEN
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 
         if(ast){
             printf(GREEN "AST gerado:\n" RESET);
-            ast_print(ast, 0);
+            ast_imprimir(ast, 0);
         }
 
     } else {
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
             RESET);
 
         printf(RED
-            "ANÁLISE SINTÁTICA FINALIZADA\n"
+            "ANÁLISE SINTÁTICA E SEMÂNTICA FINALIZADA\n"
             RESET);
 
         printf(RED
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
             RESET);
     }
     
-    ast_free(ast);
+    ast_liberar(ast);
     free(source);
     return 0;
 }

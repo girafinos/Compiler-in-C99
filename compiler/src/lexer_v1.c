@@ -64,6 +64,7 @@ Token cria_token(TokenType type, const char* lexema, int line, int column){
 
 TokenType palavra_chave_ou_id(const char *lexema){
     if(strcmp(lexema, "int") == 0) return TOKEN_INT;
+    if(strcmp(lexema, "float") == 0) return TOKEN_FLOAT;
     if(strcmp(lexema, "char") == 0) return TOKEN_CHAR;
     if(strcmp(lexema, "const") == 0) return TOKEN_CONST;
     if(strcmp(lexema, "void") == 0) return TOKEN_VOID;
@@ -106,14 +107,34 @@ Token numeros(Lexer *lexer){
     int i = 0;
     int start_line = lexer->line;
     int start_column = lexer->column; 
+    int dot_buffer = 0;
 
-    while(lexer->current_char != '\0' && isdigit(lexer->current_char) && i<99){
+    while(lexer->current_char != '\0' && (isdigit(lexer->current_char) || lexer->current_char == '.') && i<99){
+        if(i == 0 && lexer->current_char == '.'){
+            dot_buffer += 10;
+        }
+
+        if(i > 0 && lexer->current_char == '.'){
+            buffer[i] = lexer->current_char;
+            i++;
+            dot_buffer++;
+            andar_char(lexer);
+            continue;
+        }
+
         buffer[i] = lexer->current_char;
         i++;
         andar_char(lexer);
     }
 
     buffer[i] = '\0';
+
+    if(dot_buffer > 1){
+        return cria_token(TOKEN_ERROR, "Invalid float number", start_line, start_column);
+    }
+
+    if(dot_buffer == 1)
+        return cria_token(TOKEN_FLOAT_LITERAL, buffer, start_line, start_column);
 
     return cria_token(TOKEN_NUM, buffer, start_line, start_column);
 }
@@ -312,12 +333,12 @@ Token pegar_prox_token(Lexer *lexer){
             andar_char(lexer);
             return cria_token(TOKEN_HASH, "#", start_line, start_column);
         }
-        if(lexer->current_char == '.'){
-            int start_line = lexer->line;
-            int start_column = lexer->column;
-            andar_char(lexer);
-            return cria_token(TOKEN_DOT, ".", start_line, start_column);
-        }
+        // if(lexer->current_char == '.' && !isdigit(spoiler_prox_char(lexer))){
+        //     int start_line = lexer->line;
+        //     int start_column = lexer->column;
+        //     andar_char(lexer);
+        //     return cria_token(TOKEN_DOT, ".", start_line, start_column);
+        // }
         if(lexer->current_char == '&'){
             int start_line = lexer->line;
             int start_column = lexer->column;
@@ -430,8 +451,10 @@ const char* token_para_string(TokenType type){
         case TOKEN_NUM: return "TOKEN_NUM";
         case TOKEN_STRING: return "TOKEN_STRING";
         case TOKEN_CHAR_LITERAL: return "TOKEN_CHAR_LITERAL";
+        case TOKEN_FLOAT_LITERAL: return "TOKEN_FLOAT_LITERAL";
 
         case TOKEN_INT: return "TOKEN_INT";
+        case TOKEN_FLOAT: return "TOKEN_FLOAT";
         case TOKEN_CHAR: return "TOKEN_CHAR";
         case TOKEN_CONST: return "TOKEN_CONST";
         case TOKEN_VOID: return "TOKEN_VOID";
@@ -459,7 +482,7 @@ const char* token_para_string(TokenType type){
         case TOKEN_NOT: return "TOKEN_NOT";
 
         case TOKEN_HASH: return "TOKEN_HASH";
-        case TOKEN_DOT: return "TOKEN_DOT";
+        //case TOKEN_DOT: return "TOKEN_DOT";
         case TOKEN_AMPERSAND: return "TOKEN_AMPERSAND";
         case TOKEN_PIPE: return "TOKEN_PIPE";
 

@@ -40,11 +40,11 @@ struct ASTNode {
     ASTNode *extra;
 };
 
-ASTNode *ast_new_node(ASTNodeType type, int line, int column);
-ASTNode *ast_new_identifier(const char *name, int line, int column);
-ASTNode *ast_new_literal(const char *lexeme, TokenType token_type, int line, int column);
-ASTNode *ast_append(ASTNode *list, ASTNode *node);
-void ast_print(ASTNode *node, int indent);
-void ast_free(ASTNode *node);
+ASTNode *ast_novo_no(ASTNodeType type, int line, int column);
+ASTNode *ast_novo_identificador(const char *name, int line, int column);
+ASTNode *ast_novo_literal(const char *lexeme, TokenType token_type, int line, int column);
+ASTNode *ast_anexar(ASTNode *list, ASTNode *node);
+void ast_imprimir(ASTNode *node, int indent);
+void ast_liberar(ASTNode *node);
 
 #endif // AST_H

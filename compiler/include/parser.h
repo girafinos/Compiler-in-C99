@@ -15,6 +15,7 @@ typedef struct Scope Scope;
 typedef struct {
     Lexer *lexer;
     Token current_token;
+    TokenType current_return_type; 
     Scope *current_scope;
     int quantidade_erros;
     int em_recuperacao;

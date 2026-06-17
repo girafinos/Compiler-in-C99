@@ -1,17 +1,26 @@
+int soma(int a, int b){
+    int resultado = a + b;
+    int lixo;
+    return resultado;
+}
+
 int main(){
     int x;
-    int y;
-    
-    x = 10;
-    y = x + 5;
-    
-    int z = y;
-    
-    w = 20;
-    
-    int a = undefined_var;
-    
-    a = a + 1;
-    
+    int y = 10;
+    float z;
+    char c = 'A';
+
+    x = y + 5;
+    z = 3.14;
+    z = y;
+    c = 10;
+
+    y = z;
+    y = resultado;
+
+    if(x > 0){
+        int x = 99;
+    }
+
     return 0;
 }

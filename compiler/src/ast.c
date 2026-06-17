@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-ASTNode *ast_new_node(ASTNodeType type, int line, int column){
+ASTNode *ast_novo_no(ASTNodeType type, int line, int column){
     ASTNode *node = malloc(sizeof(ASTNode));
     if(!node) return NULL;
     node->type = type;
@@ -20,22 +20,22 @@ ASTNode *ast_new_node(ASTNodeType type, int line, int column){
     return node;
 }
 
-ASTNode *ast_new_identifier(const char *name, int line, int column){
-    ASTNode *node = ast_new_node(AST_IDENTIFIER, line, column);
+ASTNode *ast_novo_identificador(const char *name, int line, int column){
+    ASTNode *node = ast_novo_no(AST_IDENTIFIER, line, column);
     if(!node) return NULL;
     node->name = strdup(name);
     return node;
 }
 
-ASTNode *ast_new_literal(const char *lexeme, TokenType token_type, int line, int column){
-    ASTNode *node = ast_new_node(AST_LITERAL, line, column);
+ASTNode *ast_novo_literal(const char *lexeme, TokenType token_type, int line, int column){
+    ASTNode *node = ast_novo_no(AST_LITERAL, line, column);
     if(!node) return NULL;
     node->lexeme = strdup(lexeme);
     node->value_type = token_type;
     return node;
 }
 
-ASTNode *ast_append(ASTNode *list, ASTNode *node){
+ASTNode *ast_anexar(ASTNode *list, ASTNode *node){
     if(!node) return list;
     if(!list) return node;
     ASTNode *cursor = list;
@@ -44,38 +44,38 @@ ASTNode *ast_append(ASTNode *list, ASTNode *node){
     return list;
 }
 
-static void ast_print_indent(int indent){
+static void ast_imprimir_indentacao(int indent){
     for(int i = 0; i < indent; i++) printf("  ");
 }
 
-static const char *ast_type_name(ASTNodeType type){
+static const char *ast_nome_tipo(ASTNodeType type){
     switch(type){
-        case AST_PROGRAM: return "Program";
-        case AST_FUNCTION_DECL: return "FunctionDecl";
-        case AST_PARAMETER: return "Parameter";
-        case AST_BLOCK: return "Block";
-        case AST_DECLARATION: return "Declaration";
-        case AST_ASSIGNMENT: return "Assignment";
-        case AST_IF: return "If";
-        case AST_WHILE: return "While";
-        case AST_FOR: return "For";
-        case AST_RETURN: return "Return";
+        case AST_PROGRAM: return "Programa";
+        case AST_FUNCTION_DECL: return "Funcao";
+        case AST_PARAMETER: return "Parametro";
+        case AST_BLOCK: return "Bloco";
+        case AST_DECLARATION: return "Declaracao";
+        case AST_ASSIGNMENT: return "Atribuicao";
+        case AST_IF: return "Se";
+        case AST_WHILE: return "Enquanto";
+        case AST_FOR: return "Para";
+        case AST_RETURN: return "Retorno";
         case AST_BREAK: return "Break";
         case AST_CONTINUE: return "Continue";
-        case AST_EXPRESSION_STATEMENT: return "ExprStmt";
-        case AST_FUNCTION_CALL: return "Call";
-        case AST_BINARY_EXPR: return "BinaryExpr";
-        case AST_UNARY_EXPR: return "UnaryExpr";
+        case AST_EXPRESSION_STATEMENT: return "Expressao";
+        case AST_FUNCTION_CALL: return "Chamada";
+        case AST_BINARY_EXPR: return "ExprBinaria";
+        case AST_UNARY_EXPR: return "ExprUnaria";
         case AST_LITERAL: return "Literal";
-        case AST_IDENTIFIER: return "Identifier";
-        default: return "Unknown";
+        case AST_IDENTIFIER: return "Identificador";
+        default: return "Desconhecido";
     }
 }
 
-static void ast_print_node(ASTNode *node, int indent){
+static void ast_imprimir_no(ASTNode *node, int indent){
     if(!node) return;
-    ast_print_indent(indent);
-    printf("%s", ast_type_name(node->type));
+    ast_imprimir_indentacao(indent);
+    printf("%s", ast_nome_tipo(node->type));
     switch(node->type){
         case AST_FUNCTION_DECL:
             printf(" name=%s", node->name ? node->name : "<anon>");
@@ -111,68 +111,68 @@ static void ast_print_node(ASTNode *node, int indent){
 
     switch(node->type){
         case AST_PROGRAM:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_FUNCTION_DECL:
-            ast_print(node->left, indent + 1);
-            ast_print(node->right, indent + 1);
+            ast_imprimir(node->left, indent + 1);
+            ast_imprimir(node->right, indent + 1);
             break;
         case AST_BLOCK:
         case AST_EXPRESSION_STATEMENT:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_DECLARATION:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_ASSIGNMENT:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_IF:
-            ast_print(node->left, indent + 1);
-            ast_print(node->right, indent + 1);
-            ast_print(node->third, indent + 1);
+            ast_imprimir(node->left, indent + 1);
+            ast_imprimir(node->right, indent + 1);
+            ast_imprimir(node->third, indent + 1);
             break;
         case AST_WHILE:
-            ast_print(node->left, indent + 1);
-            ast_print(node->right, indent + 1);
+            ast_imprimir(node->left, indent + 1);
+            ast_imprimir(node->right, indent + 1);
             break;
         case AST_FOR:
-            ast_print(node->left, indent + 1);
-            ast_print(node->right, indent + 1);
-            ast_print(node->third, indent + 1);
-            ast_print(node->extra, indent + 1);
+            ast_imprimir(node->left, indent + 1);
+            ast_imprimir(node->right, indent + 1);
+            ast_imprimir(node->third, indent + 1);
+            ast_imprimir(node->extra, indent + 1);
             break;
         case AST_RETURN:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_FUNCTION_CALL:
-            ast_print(node->left, indent + 1);
+            ast_imprimir(node->left, indent + 1);
             break;
         case AST_BINARY_EXPR:
         case AST_UNARY_EXPR:
-            ast_print(node->left, indent + 1);
-            ast_print(node->right, indent + 1);
+            ast_imprimir(node->left, indent + 1);
+            ast_imprimir(node->right, indent + 1);
             break;
         default:
             break;
     }
 }
 
-void ast_print(ASTNode *node, int indent){
+void ast_imprimir(ASTNode *node, int indent){
     for(ASTNode *cursor = node; cursor; cursor = cursor->next){
-        ast_print_node(cursor, indent);
+        ast_imprimir_no(cursor, indent);
     }
 }
 
-void ast_free(ASTNode *node){
+void ast_liberar(ASTNode *node){
     while(node){
         ASTNode *next = node->next;
         if(node->name) free(node->name);
         if(node->lexeme) free(node->lexeme);
-        ast_free(node->left);
-        ast_free(node->right);
-        ast_free(node->third);
-        ast_free(node->extra);
+        ast_liberar(node->left);
+        ast_liberar(node->right);
+        ast_liberar(node->third);
+        ast_liberar(node->extra);
         free(node);
         node = next;
     }
