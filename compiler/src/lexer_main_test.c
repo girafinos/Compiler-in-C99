@@ -6,7 +6,7 @@ int main(int argc, char *argv[]) {
     Lexer lexer;
     Token token;
 
-    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/entrada.txt";
+    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/test_semantic_comprehensive.txt";
     char *source = ler_arquivo(filename);
     if (source == NULL) {
         printf("Erro ao abrir o arquivo: %s\n", filename);

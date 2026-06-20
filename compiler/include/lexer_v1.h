@@ -11,8 +11,10 @@ typedef enum {
     TOKEN_NUM,  
     TOKEN_STRING,
     TOKEN_CHAR_LITERAL,
+    TOKEN_FLOAT_LITERAL,
 
     //Palavras reservadas
+    TOKEN_FLOAT,
     TOKEN_INT,
     TOKEN_CHAR,
     TOKEN_CONST,
@@ -43,7 +45,7 @@ typedef enum {
 
     //Caracteres especiais
     TOKEN_HASH,        //#
-    TOKEN_DOT,         //.
+    //TOKEN_DOT,         //.
     TOKEN_AMPERSAND,   //&
     TOKEN_PIPE,        //|
 
