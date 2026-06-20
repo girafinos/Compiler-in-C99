@@ -1,6 +1,5 @@
 #include "lexer_v1.h"
 #include "parser.h"
-#include "ast.h"
 
 char *ler_arquivo(const char *filename);
 
@@ -8,7 +7,7 @@ int main(int argc, char *argv[]) {
     Lexer lexer;
     Parser parser;
 
-    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/test_semantic.txt";
+    const char *filename = (argc > 1) ? argv[1] : "compiler/tests/ok.txt";
     char *source = ler_arquivo(filename);
     if (source == NULL) {
         printf("Erro ao abrir o arquivo: %s\n", filename);
@@ -18,7 +17,7 @@ int main(int argc, char *argv[]) {
     inicializar_lexer(&lexer, source);
     inicializar_parser(&parser, &lexer);
 
-    ASTNode *ast = analisar_programa(&parser);
+    analisar_programa(&parser);
 
     printf("\n");
 
@@ -40,11 +39,6 @@ int main(int argc, char *argv[]) {
             "====================================\n"
             RESET);
 
-        if(ast){
-            printf(GREEN "AST gerado:\n" RESET);
-            ast_imprimir(ast, 0);
-        }
-
     } else {
 
         printf(RED
@@ -64,7 +58,6 @@ int main(int argc, char *argv[]) {
             RESET);
     }
     
-    ast_liberar(ast);
     free(source);
-    return 0;
+    return parser.quantidade_erros == 0 ? 0 : 1;
 }
