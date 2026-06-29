@@ -182,11 +182,11 @@ static TokenType operador_unario_tipo(TokenType op, TokenType operand_type){
 }
 
 // Converte token de literal para tipo
-static TokenType literal_para_tipo(TokenType token_type){
-    if(token_type == TOKEN_FLOAT_LITERAL) 
-        return TOKEN_FLOAT;
-    return token_type;
-}
+// static TokenType literal_para_tipo(TokenType token_type){
+//     if(token_type == TOKEN_FLOAT_LITERAL) 
+//         return TOKEN_FLOAT;
+//     return token_type;
+// }
 
 // Valida compatibilidade de tipos numa atribuição (critério "types")
 static void validar_tipos(Parser *parser,
@@ -254,13 +254,15 @@ static void validar_tipos(Parser *parser,
 //  INFRAESTRUTURA DO PARSER
 // =============================================================================
 
-void inicializar_parser(Parser *parser, Lexer *lexer){
-    parser->lexer            = lexer;
-    parser->current_token    = pegar_prox_token(lexer);
-    parser->current_scope    = criar_escopo(NULL); 
-    parser->em_recuperacao   = 0;
-    parser->quantidade_erros = 0;
-    parser->current_return_type = TOKEN_VOID; 
+void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg){
+    parser->lexer               = lexer;
+    parser->current_token       = pegar_prox_token(lexer);
+    parser->current_scope       = criar_escopo(NULL); 
+    parser->em_recuperacao      = 0;
+    parser->quantidade_erros    = 0;
+    parser->current_return_type = TOKEN_VOID;
+    parser->last_reg            = -1;
+    parser->cg                  = cg;
 }
 
 void avancar_token(Parser *parser){
@@ -420,23 +422,35 @@ int analisar_tipo(Parser *parser){
 //    - retorna tipo da expressão (critério "types")
 // =============================================================================
 
-TokenType analisar_fator(Parser *parser){
-    if(parser->em_recuperacao) return TOKEN_ERROR;
+TokenType analisar_fator(Parser *parser) {
+    if (parser->em_recuperacao) return TOKEN_ERROR;
+
+    CodeGen *cg = parser->cg;
 
     // --- Operadores unários: - e ! ---
-    if(parser->current_token.type == TOKEN_MINUS ||
-       parser->current_token.type == TOKEN_NOT){
-        TokenType op  = parser->current_token.type;
+    if (parser->current_token.type == TOKEN_MINUS ||
+        parser->current_token.type == TOKEN_NOT) {
+        TokenType op = parser->current_token.type;
         consumir_token(parser, op);
 
         TokenType operand_type = analisar_fator(parser);
-        if(operand_type == TOKEN_ERROR) return TOKEN_ERROR;
+        if (operand_type == TOKEN_ERROR) return TOKEN_ERROR;
+
+        if (cg) {
+            int reg  = parser->last_reg;
+            int novo = codegen_novo_reg(cg);
+            if (op == TOKEN_MINUS)
+                codegen_emitir("sub $t%d, $zero, $t%d", novo, reg);
+            else
+                codegen_emitir("seq $t%d, $t%d, $zero", novo, reg);
+            parser->last_reg = novo;
+        }
 
         return operador_unario_tipo(op, operand_type);
     }
 
-    // --- Identificador: variável ou chamada de função ---
-    if(parser->current_token.type == TOKEN_ID){
+    // --- Identificador ---
+    if (parser->current_token.type == TOKEN_ID) {
         char name[100];
         strcpy(name, parser->current_token.lexema);
         int line   = parser->current_token.line;
@@ -444,97 +458,178 @@ TokenType analisar_fator(Parser *parser){
         consumir_token(parser, TOKEN_ID);
 
         // Chamada de função
-        if(parser->current_token.type == TOKEN_LPAREN){
+        if (parser->current_token.type == TOKEN_LPAREN) {
             analisar_chamada_funcao(parser, name, line, column);
-            return TOKEN_INT; // Funções retornam int por padrão (sem tabela de funções)
+            if (cg) {
+                int reg = codegen_novo_reg(cg);
+                codegen_emitir("move $t%d, $v0", reg);
+                parser->last_reg = reg;
+            }
+            return TOKEN_INT;
         }
 
         // Uso de variável
         Symbol *sym = buscar_simbolo(parser, name);
-
-        if(!sym){
-            // Critério "declared"
+        if (!sym) {
             char msg[256];
             sprintf(msg, "Variável '%s' não declarada", name);
             erro_semantico(parser, msg, line, column);
             return TOKEN_ERROR;
         }
 
-        // Critério "used"
         sym->used = 1;
 
-        // Critério "initialized"
-        if(!sym->initialized){
+        if (!sym->initialized) {
             char msg[256];
             sprintf(msg, "Variável '%s' usada sem ter sido inicializada", name);
             erro_semantico(parser, msg, line, column);
         }
 
+        if (cg) {
+            int reg = codegen_novo_reg(cg);
+            codegen_emitir("lw $t%d, %s", reg, name);
+            parser->last_reg = reg;
+        }
+
         return sym->type;
     }
 
-    // --- Literais numéricos, char e string ---
-    if(parser->current_token.type == TOKEN_NUM       ||
-       parser->current_token.type == TOKEN_CHAR_LITERAL ||
-       parser->current_token.type == TOKEN_STRING ||
-       parser->current_token.type == TOKEN_FLOAT_LITERAL){
-        TokenType literal_type = literal_para_tipo(parser->current_token.type);
-        consumir_token(parser, parser->current_token.type);
-        return literal_type;
+    // --- Literal inteiro ---
+    if (parser->current_token.type == TOKEN_NUM) {
+        char valor[64];
+        strcpy(valor, parser->current_token.lexema);
+        consumir_token(parser, TOKEN_NUM);
+
+        if (cg) {
+            int reg = codegen_novo_reg(cg);
+            codegen_emitir("li $t%d, %s", reg, valor);
+            parser->last_reg = reg;
+        }
+
+        return TOKEN_INT;
+    }
+
+    // --- Literal char ---
+    if (parser->current_token.type == TOKEN_CHAR_LITERAL) {
+        char valor[64];
+        strcpy(valor, parser->current_token.lexema);
+        consumir_token(parser, TOKEN_CHAR_LITERAL);
+
+        if (cg) {
+            int reg = codegen_novo_reg(cg);
+            codegen_emitir("li $t%d, %s", reg, valor);
+            parser->last_reg = reg;
+        }
+
+        return TOKEN_CHAR;
+    }
+
+    // --- Literal float ---
+    if (parser->current_token.type == TOKEN_FLOAT_LITERAL) {
+        char valor[64];
+        strcpy(valor, parser->current_token.lexema);
+        consumir_token(parser, TOKEN_FLOAT_LITERAL);
+
+        if (cg) {
+            int reg = codegen_novo_reg(cg);
+            codegen_emitir("# float %s (simplificado como int)", valor);
+            codegen_emitir("li $t%d, 0", reg);
+            parser->last_reg = reg;
+        }
+
+        return TOKEN_FLOAT;
+    }
+
+    // --- Literal string ---
+    if (parser->current_token.type == TOKEN_STRING) {
+        consumir_token(parser, TOKEN_STRING);
+        parser->last_reg = -1;
+        return TOKEN_STRING;
     }
 
     // --- Expressão entre parênteses ---
-    if(parser->current_token.type == TOKEN_LPAREN){
+    if (parser->current_token.type == TOKEN_LPAREN) {
         consumir_token(parser, TOKEN_LPAREN);
-        if(parser->current_token.type == TOKEN_RPAREN){
+        if (parser->current_token.type == TOKEN_RPAREN) {
             erro_de_sintaxe(parser, "Expressão vazia entre parênteses");
             return TOKEN_ERROR;
         }
-        TokenType expr_type = analisar_expressao(parser);
-        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+        TokenType tipo = analisar_expressao(parser);
+        if (parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
         consumir_token(parser, TOKEN_RPAREN);
-        return expr_type;
+        // last_reg já foi setado por analisar_expressao, não precisa mexer
+        return tipo;
     }
 
     erro_de_sintaxe(parser, "Expressão inválida: fator ausente ou operador isolado");
     return TOKEN_ERROR;
 }
 
-TokenType analisar_termo(Parser *parser){
-    if(parser->em_recuperacao) return TOKEN_ERROR;
+TokenType analisar_termo(Parser *parser) {
+    if (parser->em_recuperacao) return TOKEN_ERROR;
 
     TokenType left_type = analisar_fator(parser);
-    if(left_type == TOKEN_ERROR) return TOKEN_ERROR;
+    if (left_type == TOKEN_ERROR) return TOKEN_ERROR;
 
-    while(parser->current_token.type == TOKEN_MULT ||
-          parser->current_token.type == TOKEN_DIV){
+    CodeGen *cg = parser->cg;
+
+    while (parser->current_token.type == TOKEN_MULT ||
+           parser->current_token.type == TOKEN_DIV) {
         TokenType op = parser->current_token.type;
         consumir_token(parser, op);
 
+        int left_reg = parser->last_reg;
+
         TokenType right_type = analisar_fator(parser);
-        if(right_type == TOKEN_ERROR) return TOKEN_ERROR;
+        if (right_type == TOKEN_ERROR) return TOKEN_ERROR;
+
+        if (cg) {
+            int right_reg = parser->last_reg;
+            int resultado = codegen_novo_reg(cg);
+            if (op == TOKEN_MULT)
+                codegen_emitir("mul $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+            else
+                codegen_emitir("div $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+            parser->last_reg = resultado;
+        }
 
         left_type = operador_binario_tipo(op, left_type, right_type);
     }
+
     return left_type;
 }
 
-TokenType analisar_expressao(Parser *parser){
-    if(parser->em_recuperacao) return TOKEN_ERROR;
+TokenType analisar_expressao(Parser *parser) {
+    if (parser->em_recuperacao) return TOKEN_ERROR;
 
     TokenType left_type = analisar_termo(parser);
-    if(left_type == TOKEN_ERROR) return TOKEN_ERROR;
+    if (left_type == TOKEN_ERROR) return TOKEN_ERROR;
 
-    while(parser->current_token.type == TOKEN_PLUS ||
-          parser->current_token.type == TOKEN_MINUS){
+    CodeGen *cg = parser->cg;
+
+    while (parser->current_token.type == TOKEN_PLUS ||
+           parser->current_token.type == TOKEN_MINUS) {
         TokenType op = parser->current_token.type;
         consumir_token(parser, op);
 
+        int left_reg = parser->last_reg;
+
         TokenType right_type = analisar_termo(parser);
-        if(right_type == TOKEN_ERROR) return TOKEN_ERROR;
+        if (right_type == TOKEN_ERROR) return TOKEN_ERROR;
+
+        if (cg) {
+            int right_reg = parser->last_reg;
+            int resultado = codegen_novo_reg(cg);
+            if (op == TOKEN_PLUS)
+                codegen_emitir("add $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+            else
+                codegen_emitir("sub $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+            parser->last_reg = resultado;
+        }
 
         left_type = operador_binario_tipo(op, left_type, right_type);
     }
+
     return left_type;
 }
 

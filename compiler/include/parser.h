@@ -2,6 +2,7 @@
 #define PARSER_H
 
 #include "lexer_v1.h"
+#include "codegen.h"
 
 #define RED     "\x1b[31m"
 #define YELLOW  "\x1b[33m"
@@ -18,11 +19,23 @@ typedef struct {
     Scope *current_scope;
     int quantidade_erros;
     int em_recuperacao;
+    CodeGen *cg;
+    int last_reg;
 } Parser;
+
+typedef struct {
+    TokenType tipo;  // resultado semântico (igual ao que já existia)
+    int       reg;   // número do $t que contém o valor (-1 se inválido)
+} ExprResult;
+
+// Atalho para resultado de erro
+static inline ExprResult expr_erro(void) {
+    return (ExprResult){ .tipo = TOKEN_ERROR, .reg = -1 };
+}
 
 // =========== Infraestrutura do Parser ===========
 
-void inicializar_parser(Parser *parser, Lexer *lexer);
+void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg);
 void avancar_token(Parser *parser);
 
 // Retornam 0 para indicar falha — permite propagação de erro
