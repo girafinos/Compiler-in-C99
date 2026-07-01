@@ -23,16 +23,6 @@ typedef struct {
     int last_reg;
 } Parser;
 
-typedef struct {
-    TokenType tipo;  // resultado semântico (igual ao que já existia)
-    int       reg;   // número do $t que contém o valor (-1 se inválido)
-} ExprResult;
-
-// Atalho para resultado de erro
-static inline ExprResult expr_erro(void) {
-    return (ExprResult){ .tipo = TOKEN_ERROR, .reg = -1 };
-}
-
 // =========== Infraestrutura do Parser ===========
 
 void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg);

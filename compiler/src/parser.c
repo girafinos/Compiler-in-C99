@@ -440,9 +440,9 @@ TokenType analisar_fator(Parser *parser) {
             int reg  = parser->last_reg;
             int novo = codegen_novo_reg(cg);
             if (op == TOKEN_MINUS)
-                codegen_emitir("sub $t%d, $zero, $t%d", novo, reg);
+                codegen_emitir(cg, "sub $t%d, $zero, $t%d", novo, reg);
             else
-                codegen_emitir("seq $t%d, $t%d, $zero", novo, reg);
+                codegen_emitir(cg, "seq $t%d, $t%d, $zero", novo, reg);
             parser->last_reg = novo;
         }
 
@@ -462,7 +462,7 @@ TokenType analisar_fator(Parser *parser) {
             analisar_chamada_funcao(parser, name, line, column);
             if (cg) {
                 int reg = codegen_novo_reg(cg);
-                codegen_emitir("move $t%d, $v0", reg);
+                codegen_emitir(cg, "move $t%d, $v0", reg);
                 parser->last_reg = reg;
             }
             return TOKEN_INT;
@@ -487,7 +487,7 @@ TokenType analisar_fator(Parser *parser) {
 
         if (cg) {
             int reg = codegen_novo_reg(cg);
-            codegen_emitir("lw $t%d, %s", reg, name);
+            codegen_emitir(cg, "lw $t%d, %s", reg, name);
             parser->last_reg = reg;
         }
 
@@ -502,7 +502,7 @@ TokenType analisar_fator(Parser *parser) {
 
         if (cg) {
             int reg = codegen_novo_reg(cg);
-            codegen_emitir("li $t%d, %s", reg, valor);
+            codegen_emitir(cg, "li $t%d, %s", reg, valor);
             parser->last_reg = reg;
         }
 
@@ -517,7 +517,7 @@ TokenType analisar_fator(Parser *parser) {
 
         if (cg) {
             int reg = codegen_novo_reg(cg);
-            codegen_emitir("li $t%d, %s", reg, valor);
+            codegen_emitir(cg, "li $t%d, %s", reg, valor);
             parser->last_reg = reg;
         }
 
@@ -532,8 +532,8 @@ TokenType analisar_fator(Parser *parser) {
 
         if (cg) {
             int reg = codegen_novo_reg(cg);
-            codegen_emitir("# float %s (simplificado como int)", valor);
-            codegen_emitir("li $t%d, 0", reg);
+            codegen_emitir(cg, "# float %s (simplificado como int)", valor);
+            codegen_emitir(cg, "li $t%d, 0", reg);
             parser->last_reg = reg;
         }
 
@@ -587,9 +587,9 @@ TokenType analisar_termo(Parser *parser) {
             int right_reg = parser->last_reg;
             int resultado = codegen_novo_reg(cg);
             if (op == TOKEN_MULT)
-                codegen_emitir("mul $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+                codegen_emitir(cg, "mul $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
             else
-                codegen_emitir("div $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+                codegen_emitir(cg, "div $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
             parser->last_reg = resultado;
         }
 
@@ -621,9 +621,9 @@ TokenType analisar_expressao(Parser *parser) {
             int right_reg = parser->last_reg;
             int resultado = codegen_novo_reg(cg);
             if (op == TOKEN_PLUS)
-                codegen_emitir("add $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+                codegen_emitir(cg, "add $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
             else
-                codegen_emitir("sub $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
+                codegen_emitir(cg, "sub $t%d, $t%d, $t%d", resultado, left_reg, right_reg);
             parser->last_reg = resultado;
         }
 
@@ -743,26 +743,34 @@ void analisar_declaracao(Parser *parser){
 
         if(expr_type != TOKEN_ERROR){
             initialized = 1;
-            // Critério "types"
             validar_tipos(parser, name, declared_type, expr_type, line, column);
+
+            // Emite sw enquanto o valor ainda está em last_reg
+            if (parser->cg && parser->last_reg >= 0) {
+                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, name);
+            }
         } else {
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
-            // Registra mesmo sem valor
             declarar_variavel(parser, name, declared_type, 0, line, column);
             free(name);
+
+            if (parser->cg) codegen_resetar_regs(parser->cg);
             return;
         }
     }
 
-    // Critério "declared"
     declarar_variavel(parser, name, declared_type, initialized, line, column);
     free(name);
 
     if(!consumir_token(parser, TOKEN_SEMICOLON)){
         parser->em_recuperacao = 0;
+
+        if (parser->cg) codegen_resetar_regs(parser->cg);
         return;
     }
+
+    if (parser->cg) codegen_resetar_regs(parser->cg);
 }
 
 // Versão sem ponto-e-vírgula usada na inicialização do for
@@ -822,18 +830,20 @@ void analisar_atribuicao(Parser *parser){
 
     TokenType expr_type = analisar_expressao(parser);
 
-    // Critério "declared"
     Symbol *sym = buscar_simbolo(parser, name);
     if(!sym){
         char msg[256];
         sprintf(msg, "Atribuição a variável '%s' não declarada", name);
         erro_semantico(parser, msg, line, column);
     } else {
-        // Critério "initialized"
         sym->initialized = 1;
-        // Critério "types"
         if(expr_type != TOKEN_ERROR){
             validar_tipos(parser, name, sym->type, expr_type, line, column);
+
+            // Só emite sw se a variável existe (senão não há endereço de memória válido)
+            if (parser->cg && parser->last_reg >= 0) {
+                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, name);
+            }
         }
     }
 
@@ -842,9 +852,14 @@ void analisar_atribuicao(Parser *parser){
     if(expr_type == TOKEN_ERROR){
         sincronizar_ate(parser, TOKEN_SEMICOLON);
         consumir_token(parser, TOKEN_SEMICOLON);
+
+        if (parser->cg) codegen_resetar_regs(parser->cg);
         return;
     }
+
     consumir_token(parser, TOKEN_SEMICOLON);
+
+    if (parser->cg) codegen_resetar_regs(parser->cg);
 }
 
 // Versão sem ponto-e-vírgula usada na atribuição do for
@@ -853,7 +868,7 @@ void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
 
     if(parser->current_token.type != TOKEN_ID){
         erro_de_sintaxe(parser, "Identificador esperado na atribuição");
-        return;
+        return;   // nada emitido ainda -> sem reset
     }
 
     int   line   = parser->current_token.line;
@@ -862,7 +877,7 @@ void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
     consumir_token(parser, TOKEN_ID);
     consumir_token(parser, TOKEN_ASSIGN);
 
-    TokenType expr_type = analisar_expressao(parser);
+    TokenType expr_type = analisar_expressao(parser);   // <- pode emitir regs a partir daqui
 
     Symbol *sym = buscar_simbolo(parser, name);
     if(!sym){
@@ -876,8 +891,9 @@ void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
         }
     }
     free(name);
-}
 
+    if (parser->cg) codegen_resetar_regs(parser->cg);   // único caminho de saída após a expressão
+}
 // =============================================================================
 //  COMANDO INICIADO POR IDENTIFICADOR
 //  Distingue atribuição, chamada de função e pós-incremento/decremento.
@@ -1391,5 +1407,13 @@ void analisar_lista_de_funcoes(Parser *parser){
 int analisar_programa(Parser *parser){
     analisar_lista_de_funcoes(parser);
     consumir_token(parser, TOKEN_EOF);
+
+    if (parser->cg && parser->quantidade_erros == 0) {
+        for (Symbol *s = parser->current_scope->symbols; s; s = s->next) {
+            codegen_registrar_global(parser->cg, s->name, 1);
+        }
+        codegen_finalizar(parser->cg);
+    }
+    
     return parser->quantidade_erros == 0 ? 1 : 0;
 }
