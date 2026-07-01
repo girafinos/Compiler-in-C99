@@ -13,6 +13,7 @@
 
 typedef struct Symbol {
     char       *name;
+    char       *label;
     TokenType   type;        
     int         initialized;
     int         used;        
@@ -43,6 +44,7 @@ static void liberar_escopo(Scope *scope){
     while(sym){
         Symbol *next = sym->next;
         free(sym->name);
+        free(sym->label);
         free(sym);
         sym = next;
     }
@@ -145,6 +147,16 @@ static Symbol *declarar_variavel(Parser *parser,
     s->column      = column;
     s->next        = parser->current_scope->symbols;
     parser->current_scope->symbols = s;
+
+    char label[128];
+    snprintf(label, sizeof(label), "%s_%d", name, parser->cg ? parser->cg->var_counter++ : 0);
+    s->label = strdup(label);
+
+    // Reserva espaço em .data para esta variável (1 palavra por escalar)
+    if (parser->cg) {
+        codegen_registrar_global(parser->cg, label, 1);
+    }
+
     return s;
 }
 
@@ -181,7 +193,7 @@ static TokenType operador_unario_tipo(TokenType op, TokenType operand_type){
     return operand_type;
 }
 
-// Converte token de literal para tipo
+// // Converte token de literal para tipo
 // static TokenType literal_para_tipo(TokenType token_type){
 //     if(token_type == TOKEN_FLOAT_LITERAL) 
 //         return TOKEN_FLOAT;
@@ -257,7 +269,7 @@ static void validar_tipos(Parser *parser,
 void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg){
     parser->lexer               = lexer;
     parser->current_token       = pegar_prox_token(lexer);
-    parser->current_scope       = criar_escopo(NULL); 
+    parser->current_scope       = criar_escopo(NULL);
     parser->em_recuperacao      = 0;
     parser->quantidade_erros    = 0;
     parser->current_return_type = TOKEN_VOID;
@@ -487,7 +499,7 @@ TokenType analisar_fator(Parser *parser) {
 
         if (cg) {
             int reg = codegen_novo_reg(cg);
-            codegen_emitir(cg, "lw $t%d, %s", reg, name);
+            codegen_emitir(cg, "lw $t%d, %s", reg, sym->label);
             parser->last_reg = reg;
         }
 
@@ -633,6 +645,7 @@ TokenType analisar_expressao(Parser *parser) {
     return left_type;
 }
 
+
 TokenType analisar_condicao_relacional(Parser *parser){
     if(parser->em_recuperacao) return TOKEN_ERROR;
 
@@ -744,11 +757,6 @@ void analisar_declaracao(Parser *parser){
         if(expr_type != TOKEN_ERROR){
             initialized = 1;
             validar_tipos(parser, name, declared_type, expr_type, line, column);
-
-            // Emite sw enquanto o valor ainda está em last_reg
-            if (parser->cg && parser->last_reg >= 0) {
-                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, name);
-            }
         } else {
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
@@ -760,8 +768,13 @@ void analisar_declaracao(Parser *parser){
         }
     }
 
-    declarar_variavel(parser, name, declared_type, initialized, line, column);
+    Symbol *sym_decl = declarar_variavel(parser, name, declared_type, initialized, line, column);
     free(name);
+
+    // sw só se houve inicializador, símbolo criado com sucesso e registrador válido
+    if (parser->cg && parser->last_reg >= 0 && sym_decl && initialized) {
+        codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym_decl->label);
+    }
 
     if(!consumir_token(parser, TOKEN_SEMICOLON)){
         parser->em_recuperacao = 0;
@@ -842,7 +855,7 @@ void analisar_atribuicao(Parser *parser){
 
             // Só emite sw se a variável existe (senão não há endereço de memória válido)
             if (parser->cg && parser->last_reg >= 0) {
-                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, name);
+                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym->label);
             }
         }
     }
@@ -863,6 +876,7 @@ void analisar_atribuicao(Parser *parser){
 }
 
 // Versão sem ponto-e-vírgula usada na atribuição do for
+
 void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
     if(parser->em_recuperacao) return;
 
@@ -888,12 +902,17 @@ void analisar_atribuicao_sem_ponto_virgula(Parser *parser){
         sym->initialized = 1;
         if(expr_type != TOKEN_ERROR){
             validar_tipos(parser, name, sym->type, expr_type, line, column);
+
+            if (parser->cg && parser->last_reg >= 0) {
+                codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym->label);
+            }
         }
     }
     free(name);
 
     if (parser->cg) codegen_resetar_regs(parser->cg);   // único caminho de saída após a expressão
 }
+
 // =============================================================================
 //  COMANDO INICIADO POR IDENTIFICADOR
 //  Distingue atribuição, chamada de função e pós-incremento/decremento.
@@ -905,7 +924,7 @@ void analisar_comando_iniciado_por_id(Parser *parser){
     if(parser->current_token.type != TOKEN_ID){
         erro_de_sintaxe(parser, "Identificador esperado no comando");
         sincronizar_parser(parser);
-        return;
+        return;   // nada emitido -> sem reset
     }
 
     char *name = strdup(parser->current_token.lexema);
@@ -915,7 +934,7 @@ void analisar_comando_iniciado_por_id(Parser *parser){
 
     if(parser->current_token.type == TOKEN_ASSIGN){
         consumir_token(parser, TOKEN_ASSIGN);
-        TokenType expr_type = analisar_expressao(parser);
+        TokenType expr_type = analisar_expressao(parser);   // <- pode emitir regs
 
         Symbol *sym = buscar_simbolo(parser, name);
         if(!sym){
@@ -926,6 +945,10 @@ void analisar_comando_iniciado_por_id(Parser *parser){
             sym->initialized = 1;
             if(expr_type != TOKEN_ERROR){
                 validar_tipos(parser, name, sym->type, expr_type, line, column);
+
+                if (parser->cg && parser->last_reg >= 0) {
+                    codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym->label);
+                }
             }
         }
 
@@ -933,21 +956,27 @@ void analisar_comando_iniciado_por_id(Parser *parser){
             sincronizar_ate(parser, TOKEN_SEMICOLON);
             consumir_token(parser, TOKEN_SEMICOLON);
             free(name);
+
+            if (parser->cg) codegen_resetar_regs(parser->cg);   // expressão falhou, mas pode ter gasto regs
             return;
         }
         consumir_token(parser, TOKEN_SEMICOLON);
 
-    // Chamada de função
+        if (parser->cg) codegen_resetar_regs(parser->cg);   // caminho de sucesso da atribuição
+
     } else if(parser->current_token.type == TOKEN_LPAREN){
         analisar_chamada_funcao(parser, name, line, column);
         consumir_token(parser, TOKEN_SEMICOLON);
 
-    // Pós-incremento / pós-decremento
+        // chamada de função pode emitir código (a versão atual de analisar_fator
+        // já gera "move $tN, $v0" para chamadas usadas em expressão, mas aqui dentro
+        // de analisar_lista_de_argumentos cada argumento já é uma analisar_expressao)
+        if (parser->cg) codegen_resetar_regs(parser->cg);
+
     } else if(parser->current_token.type == TOKEN_INCREMENT ||
               parser->current_token.type == TOKEN_DECREMENT){
         consumir_token(parser, parser->current_token.type);
 
-        // Critérios "declared", "initialized", "used"
         Symbol *sym = buscar_simbolo(parser, name);
         if(!sym){
             char msg[256];
@@ -959,13 +988,16 @@ void analisar_comando_iniciado_por_id(Parser *parser){
         }
 
         consumir_token(parser, TOKEN_SEMICOLON);
+        // nada emitido neste ramo ainda (++/-- não gera código por enquanto) -> sem reset necessário,
+        // mas não faz mal deixar por segurança/consistência:
+        if (parser->cg) codegen_resetar_regs(parser->cg);
 
     } else {
         erro_de_sintaxe(parser,
             "Esperado atribuição, chamada de função, ++ ou -- após o identificador");
         sincronizar_parser(parser);
         free(name);
-        return;
+        return;   // erro de sintaxe, nada emitido -> sem reset
     }
 
     free(name);
@@ -1161,7 +1193,6 @@ void analisar_inicializacao_for(Parser *parser){
 void analisar_expressao_de_incremento(Parser *parser){
     if(parser->em_recuperacao) return;
 
-    // Pós-incremento/decremento: i++  i--
     if(parser->current_token.type == TOKEN_ID){
         int   line   = parser->current_token.line;
         int   column = parser->current_token.column;
@@ -1181,10 +1212,11 @@ void analisar_expressao_de_incremento(Parser *parser){
                 sym->initialized = 1;
                 sym->used        = 1;
             }
+            // nada emitido (++ ainda não gera código) -> sem reset necessário
 
         } else if(parser->current_token.type == TOKEN_ASSIGN){
             consumir_token(parser, TOKEN_ASSIGN);
-            TokenType expr_type = analisar_expressao(parser);
+            TokenType expr_type = analisar_expressao(parser);   // <- pode emitir regs
 
             Symbol *sym = buscar_simbolo(parser, name);
             if(!sym){
@@ -1195,8 +1227,15 @@ void analisar_expressao_de_incremento(Parser *parser){
                 sym->initialized = 1;
                 if(expr_type != TOKEN_ERROR){
                     validar_tipos(parser, name, sym->type, expr_type, line, column);
+
+                    if (parser->cg && parser->last_reg >= 0) {
+                        codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym->label);
+                    }
                 }
             }
+
+            if (parser->cg) codegen_resetar_regs(parser->cg);   // único caminho após a expressão
+
         } else {
             erro_de_sintaxe(parser, "Esperado ++, -- ou = na parte de incremento do for");
         }
@@ -1204,9 +1243,9 @@ void analisar_expressao_de_incremento(Parser *parser){
         free(name);
         return;
 
-    // Pré-incremento/decremento: ++i  --i
     } else if(parser->current_token.type == TOKEN_INCREMENT ||
               parser->current_token.type == TOKEN_DECREMENT){
+        // pré-incremento/decremento — não emite código ainda, sem reset necessário
         consumir_token(parser, parser->current_token.type);
 
         if(parser->current_token.type != TOKEN_ID){
@@ -1409,11 +1448,8 @@ int analisar_programa(Parser *parser){
     consumir_token(parser, TOKEN_EOF);
 
     if (parser->cg && parser->quantidade_erros == 0) {
-        for (Symbol *s = parser->current_scope->symbols; s; s = s->next) {
-            codegen_registrar_global(parser->cg, s->name, 1);
-        }
         codegen_finalizar(parser->cg);
     }
-    
+
     return parser->quantidade_erros == 0 ? 1 : 0;
 }

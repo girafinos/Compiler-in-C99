@@ -68,6 +68,7 @@ static void buffer_appendf(CodeBuffer *b, const char *fmt, va_list args) {
 void codegen_init(CodeGen *cg) {
     cg->reg_counter   = 0;
     cg->label_counter = 0;
+    cg->var_counter = 0;
     buffer_init(&cg->data);
     buffer_init(&cg->text);
 }
