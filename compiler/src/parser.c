@@ -656,11 +656,34 @@ TokenType analisar_condicao_relacional(Parser *parser){
         TokenType op = parser->current_token.type;
         consumir_token(parser, op);
 
+        int left_reg = parser->last_reg;
+
         TokenType right_type = analisar_expressao(parser);
         if(right_type == TOKEN_ERROR) return TOKEN_ERROR;
 
+        if(parser->cg){
+            int right_reg = parser->last_reg;
+            int resultado = codegen_novo_reg(parser->cg);
+
+            const char *instrucao;
+            switch(op){
+                case TOKEN_LT:  instrucao = "slt"; break;
+                case TOKEN_GT:  instrucao = "sgt"; break;
+                case TOKEN_LTE: instrucao = "sle"; break;
+                case TOKEN_GTE: instrucao = "sge"; break;
+                case TOKEN_EQ:  instrucao = "seq"; break;
+                case TOKEN_NEQ: instrucao = "sne"; break;
+                default:        instrucao = "seq"; break;
+            }
+
+            codegen_emitir(parser->cg, "%s $t%d, $t%d, $t%d",
+                           instrucao, resultado, left_reg, right_reg);
+            parser->last_reg = resultado;
+        }
+
         return operador_binario_tipo(op, left_type, right_type);
     }
+
     return left_type;
 }
 
@@ -675,11 +698,28 @@ TokenType analisar_condicao(Parser *parser){
         TokenType op = parser->current_token.type;
         consumir_token(parser, op);
 
+        int left_reg = parser->last_reg;
+
         TokenType right_type = analisar_condicao_relacional(parser);
         if(right_type == TOKEN_ERROR) return TOKEN_ERROR;
 
+        if(parser->cg){
+            int right_reg = parser->last_reg;
+            int resultado = codegen_novo_reg(parser->cg);
+
+            if(op == TOKEN_AND)
+                codegen_emitir(parser->cg, "and $t%d, $t%d, $t%d",
+                               resultado, left_reg, right_reg);
+            else
+                codegen_emitir(parser->cg, "or $t%d, $t%d, $t%d",
+                               resultado, left_reg, right_reg);
+
+            parser->last_reg = resultado;
+        }
+
         left_type = operador_binario_tipo(op, left_type, right_type);
     }
+
     return left_type;
 }
 
@@ -1145,11 +1185,48 @@ void analisar_if(Parser *parser){
     if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
     consumir_token(parser, TOKEN_RPAREN);
 
-    analisar_comando(parser);
+    if(parser->cg){
+        int cond_reg = parser->last_reg;
+        int label_id = codegen_novo_label(parser->cg);
 
-    if(parser->current_token.type == TOKEN_ELSE){
-        consumir_token(parser, TOKEN_ELSE);
+        // reserva os nomes dos labels antes de entrar no corpo
+        char l_else[32], l_end[32];
+        snprintf(l_else, sizeof(l_else), "L_else_%d", label_id);
+        snprintf(l_end,  sizeof(l_end),  "L_end_%d",  label_id);
+
+        int tem_else = 0;
+
+        // salta para else (ou end) se condição for falsa
+        codegen_emitir(parser->cg, "beq $t%d, $zero, %s",
+                       cond_reg, l_else);
+        codegen_resetar_regs(parser->cg);
+
+        analisar_comando(parser);  // corpo do if
+
+        // verifica se tem else antes de emitir o j
+        if(parser->current_token.type == TOKEN_ELSE){
+            tem_else = 1;
+            codegen_emitir(parser->cg, "j %s", l_end);
+        }
+
+        codegen_emitir_label(parser->cg, l_else);
+
+        if(tem_else){
+            consumir_token(parser, TOKEN_ELSE);
+            codegen_resetar_regs(parser->cg);
+            analisar_comando(parser);  // corpo do else
+            codegen_emitir_label(parser->cg, l_end);
+        }
+
+        codegen_resetar_regs(parser->cg);
+
+    } else {
+        // sem codegen, comportamento original
         analisar_comando(parser);
+        if(parser->current_token.type == TOKEN_ELSE){
+            consumir_token(parser, TOKEN_ELSE);
+            analisar_comando(parser);
+        }
     }
 }
 
