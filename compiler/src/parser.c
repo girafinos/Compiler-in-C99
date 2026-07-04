@@ -1240,11 +1240,37 @@ void analisar_while(Parser *parser){
         return;
     }
 
-    analisar_condicao(parser);
-    if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
-    consumir_token(parser, TOKEN_RPAREN);
+    if(parser->cg){
+        int label_id = codegen_novo_label(parser->cg);
 
-    analisar_comando(parser);
+        char l_inicio[32], l_end[32];
+        snprintf(l_inicio, sizeof(l_inicio), "L_inicio_%d", label_id);
+        snprintf(l_end,    sizeof(l_end),    "L_end_%d",    label_id);
+
+        // label de início — volta aqui a cada iteração
+        codegen_emitir_label(parser->cg, l_inicio);
+
+        analisar_condicao(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+        consumir_token(parser, TOKEN_RPAREN);
+
+        int cond_reg = parser->last_reg;
+        codegen_emitir(parser->cg, "beq $t%d, $zero, %s", cond_reg, l_end);
+        codegen_resetar_regs(parser->cg);
+
+        analisar_comando(parser);  // corpo do while
+
+        codegen_emitir(parser->cg, "j %s", l_inicio);
+        codegen_emitir_label(parser->cg, l_end);
+
+        codegen_resetar_regs(parser->cg);
+
+    } else {
+        analisar_condicao(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+        consumir_token(parser, TOKEN_RPAREN);
+        analisar_comando(parser);
+    }
 }
 
 // =============================================================================
