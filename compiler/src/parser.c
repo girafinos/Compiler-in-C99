@@ -854,8 +854,14 @@ void analisar_declaracao_sem_ponto_virgula(Parser *parser){
         }
     }
 
-    declarar_variavel(parser, name, declared_type, initialized, line, column);
+    Symbol *sym_decl = declarar_variavel(parser, name, declared_type, initialized, line, column);
     free(name);
+
+    if(parser->cg && parser->last_reg >= 0 && sym_decl && initialized){
+        codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym_decl->label);
+    }
+
+    // if(parser->cg) codegen_resetar_regs(parser->cg);
 }
 
 // =============================================================================
@@ -1384,36 +1390,115 @@ void analisar_for(Parser *parser){
         return;
     }
 
-    // Escopo do for
     entrar_escopo(parser);
 
+    // inicialização
     analisar_inicializacao_for(parser);
     if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_SEMICOLON);
     consumir_token(parser, TOKEN_SEMICOLON);
 
-    analisar_condicao(parser);
-    if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_SEMICOLON);
-    consumir_token(parser, TOKEN_SEMICOLON);
+    if(parser->cg){
+        int label_id = codegen_novo_label(parser->cg);
 
-    analisar_expressao_de_incremento(parser);
-    if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+        char l_inicio[32], l_end[32];
+        snprintf(l_inicio, sizeof(l_inicio), "L_inicio_%d", label_id);
+        snprintf(l_end,    sizeof(l_end),    "L_end_%d",    label_id);
 
-    if(!consumir_token(parser, TOKEN_RPAREN)){
-        if(parser->current_token.type == TOKEN_LBRACE){
-            parser->em_recuperacao = 0;
-        } else {
-            sincronizar_ate(parser, TOKEN_RPAREN);
-            if(parser->current_token.type == TOKEN_RPAREN)
-                consumir_token(parser, TOKEN_RPAREN);
-            else {
-                sair_escopo(parser);
-                sincronizar_parser(parser);
-                return;
+        // label de início — avalia condição a cada iteração
+        codegen_emitir_label(parser->cg, l_inicio);
+
+        analisar_condicao(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_SEMICOLON);
+        consumir_token(parser, TOKEN_SEMICOLON);
+
+        int cond_reg = parser->last_reg;
+        codegen_emitir(parser->cg, "beq $t%d, $zero, %s", cond_reg, l_end);
+        codegen_resetar_regs(parser->cg);
+
+        // precisamos guardar o texto do incremento para emitir DEPOIS do corpo
+        // solução: trocar temporariamente o buffer de texto por um buffer auxiliar,
+        // gerar o incremento nele, depois emitir corpo, depois appendar o auxiliar
+        // salva o buffer original por valor
+        CodeBuffer text_salvo = parser->cg->text;
+
+        // buffer temporário para o incremento
+        parser->cg->text.cap = 256;
+        parser->cg->text.len = 0;
+        parser->cg->text.buf = malloc(256);
+        parser->cg->text.buf[0] = '\0';
+
+        analisar_expressao_de_incremento(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+        codegen_resetar_regs(parser->cg);
+
+        // salva o incremento e restaura o buffer original
+        CodeBuffer incremento = parser->cg->text;
+        parser->cg->text = text_salvo;  // restaura o valor original correto
+
+        if(!consumir_token(parser, TOKEN_RPAREN)){
+            if(parser->current_token.type == TOKEN_LBRACE){
+                parser->em_recuperacao = 0;
+            } else {
+                sincronizar_ate(parser, TOKEN_RPAREN);
+                if(parser->current_token.type == TOKEN_RPAREN)
+                    consumir_token(parser, TOKEN_RPAREN);
+                else {
+                    free(incremento.buf);
+                    sair_escopo(parser);
+                    sincronizar_parser(parser);
+                    return;
+                }
             }
         }
+
+        analisar_comando(parser);  // corpo do for
+
+        // emite incremento depois do corpo
+        if(incremento.len > 0){
+            // buffer_append direto no text atual
+            // reutilizamos buffer_append via codegen_emitir seria linha a linha,
+            // mas como já está formatado, appendamos o bloco inteiro
+            size_t necessario = parser->cg->text.len + incremento.len + 1;
+            if(necessario > parser->cg->text.cap){
+                while(parser->cg->text.cap < necessario) parser->cg->text.cap *= 2;
+                parser->cg->text.buf = realloc(parser->cg->text.buf, parser->cg->text.cap);
+            }
+            memcpy(parser->cg->text.buf + parser->cg->text.len,
+                   incremento.buf, incremento.len + 1);
+            parser->cg->text.len += incremento.len;
+        }
+        free(incremento.buf);
+
+        codegen_emitir(parser->cg, "j %s", l_inicio);
+        codegen_emitir_label(parser->cg, l_end);
+        codegen_resetar_regs(parser->cg);
+
+    } else {
+        analisar_condicao(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_SEMICOLON);
+        consumir_token(parser, TOKEN_SEMICOLON);
+
+        analisar_expressao_de_incremento(parser);
+        if(parser->em_recuperacao) sincronizar_ate(parser, TOKEN_RPAREN);
+
+        if(!consumir_token(parser, TOKEN_RPAREN)){
+            if(parser->current_token.type == TOKEN_LBRACE){
+                parser->em_recuperacao = 0;
+            } else {
+                sincronizar_ate(parser, TOKEN_RPAREN);
+                if(parser->current_token.type == TOKEN_RPAREN)
+                    consumir_token(parser, TOKEN_RPAREN);
+                else {
+                    sair_escopo(parser);
+                    sincronizar_parser(parser);
+                    return;
+                }
+            }
+        }
+
+        analisar_comando(parser);
     }
 
-    analisar_comando(parser);
     sair_escopo(parser);
 }
 
