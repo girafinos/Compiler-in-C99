@@ -263,6 +263,30 @@ static void validar_tipos(Parser *parser,
 }
 
 // =============================================================================
+//  AUXILIARES DE PILHA
+// =============================================================================
+
+static void push_loop_context(Parser *parser, const char *l_inicio, const char *l_end){
+    if(parser->loop_depth >= MAX_LOOP_DEPTH){
+        fprintf(stderr, "[CODEGEN] Loop aninhado muito profundo\n");
+        return;
+    }
+    strncpy(parser->loop_stack[parser->loop_depth].l_inicio, l_inicio, 31);
+    strncpy(parser->loop_stack[parser->loop_depth].l_end,    l_end,    31);
+    parser->loop_depth++;
+}
+
+static void pop_loop_context(Parser *parser){
+    if(parser->loop_depth > 0)
+        parser->loop_depth--;
+}
+
+static LoopContext *top_loop_context(Parser *parser){
+    if(parser->loop_depth == 0) return NULL;
+    return &parser->loop_stack[parser->loop_depth - 1];
+}
+
+// =============================================================================
 //  INFRAESTRUTURA DO PARSER
 // =============================================================================
 
@@ -275,6 +299,7 @@ void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg){
     parser->current_return_type = TOKEN_VOID;
     parser->last_reg            = -1;
     parser->cg                  = cg;
+    parser->loop_depth          = 0;
 }
 
 void avancar_token(Parser *parser){
@@ -861,7 +886,7 @@ void analisar_declaracao_sem_ponto_virgula(Parser *parser){
         codegen_emitir(parser->cg, "sw $t%d, %s", parser->last_reg, sym_decl->label);
     }
 
-    // if(parser->cg) codegen_resetar_regs(parser->cg);
+    //if(parser->cg) codegen_resetar_regs(parser->cg);
 }
 
 // =============================================================================
@@ -1253,7 +1278,6 @@ void analisar_while(Parser *parser){
         snprintf(l_inicio, sizeof(l_inicio), "L_inicio_%d", label_id);
         snprintf(l_end,    sizeof(l_end),    "L_end_%d",    label_id);
 
-        // label de início — volta aqui a cada iteração
         codegen_emitir_label(parser->cg, l_inicio);
 
         analisar_condicao(parser);
@@ -1264,11 +1288,12 @@ void analisar_while(Parser *parser){
         codegen_emitir(parser->cg, "beq $t%d, $zero, %s", cond_reg, l_end);
         codegen_resetar_regs(parser->cg);
 
-        analisar_comando(parser);  // corpo do while
+        push_loop_context(parser, l_inicio, l_end);
+        analisar_comando(parser);
+        pop_loop_context(parser);
 
         codegen_emitir(parser->cg, "j %s", l_inicio);
         codegen_emitir_label(parser->cg, l_end);
-
         codegen_resetar_regs(parser->cg);
 
     } else {
@@ -1451,7 +1476,9 @@ void analisar_for(Parser *parser){
             }
         }
 
+        push_loop_context(parser, l_inicio, l_end);
         analisar_comando(parser);  // corpo do for
+        pop_loop_context(parser);
 
         // emite incremento depois do corpo
         if(incremento.len > 0){
@@ -1540,13 +1567,35 @@ void analisar_return(Parser *parser){
 
 void analisar_break(Parser *parser){
     if(parser->em_recuperacao) return;
+
+    int line   = parser->current_token.line;
+    int column = parser->current_token.column;
     consumir_token(parser, TOKEN_BREAK);
+
+    LoopContext *ctx = top_loop_context(parser);
+    if(!ctx){
+        erro_semantico(parser, "break fora de um loop", line, column);
+    } else if(parser->cg){
+        codegen_emitir(parser->cg, "j %s", ctx->l_end);
+    }
+
     consumir_token(parser, TOKEN_SEMICOLON);
 }
 
 void analisar_continue(Parser *parser){
     if(parser->em_recuperacao) return;
+
+    int line   = parser->current_token.line;
+    int column = parser->current_token.column;
     consumir_token(parser, TOKEN_CONTINUE);
+
+    LoopContext *ctx = top_loop_context(parser);
+    if(!ctx){
+        erro_semantico(parser, "continue fora de um loop", line, column);
+    } else if(parser->cg){
+        codegen_emitir(parser->cg, "j %s", ctx->l_inicio);
+    }
+
     consumir_token(parser, TOKEN_SEMICOLON);
 }
 
