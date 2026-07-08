@@ -23,7 +23,6 @@ static void buffer_destruir(CodeBuffer *b) {
     b->len = b->cap = 0;
 }
 
-// Garante espaço para mais `extra` bytes (+1 para o terminador nulo)
 static void buffer_reservar(CodeBuffer *b, size_t extra) {
     size_t necessario = b->len + extra + 1;
     if (necessario <= b->cap) return;
@@ -43,12 +42,11 @@ static void buffer_reservar(CodeBuffer *b, size_t extra) {
 static void buffer_append(CodeBuffer *b, const char *s) {
     size_t s_len = strlen(s);
     buffer_reservar(b, s_len);
-    memcpy(b->buf + b->len, s, s_len + 1); // copia o '\0' também
+    memcpy(b->buf + b->len, s, s_len + 1); 
     b->len += s_len;
 }
 
 static void buffer_appendf(CodeBuffer *b, const char *fmt, va_list args) {
-    // Primeiro tenta estimar o tamanho necessário com vsnprintf(NULL, 0, ...)
     va_list args_copy;
     va_copy(args_copy, args);
     int precisa = vsnprintf(NULL, 0, fmt, args_copy);
@@ -110,7 +108,6 @@ void codegen_emitir_label(CodeGen *cg, const char *nome) {
 
 void codegen_registrar_global(CodeGen *cg, const char *nome, int tamanho_palavras) {
     char linha[256];
-    // .word 0, 0, ... — uma palavra zerada por slot (1 para escalares)
     snprintf(linha, sizeof(linha), "%s: .word 0", nome);
     for (int i = 1; i < tamanho_palavras; i++) {
         strncat(linha, ", 0", sizeof(linha) - strlen(linha) - 1);
