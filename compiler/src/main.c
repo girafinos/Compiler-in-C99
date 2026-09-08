@@ -6,6 +6,7 @@ char *ler_arquivo(const char *filename);
 int main(int argc, char *argv[]) {
     Lexer lexer;
     Parser parser;
+    CodeGen cg;
 
     const char *filename = (argc > 1) ? argv[1] : "compiler/tests/ok.txt";
     char *source = ler_arquivo(filename);
@@ -14,8 +15,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    codegen_init(&cg);
     inicializar_lexer(&lexer, source);
-    inicializar_parser(&parser, &lexer);
+    inicializar_parser(&parser, &lexer, &cg);
 
     analisar_programa(&parser);
 

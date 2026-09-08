@@ -2,12 +2,20 @@
 #define PARSER_H
 
 #include "lexer_v1.h"
+#include "codegen.h"
 
 #define RED     "\x1b[31m"
 #define YELLOW  "\x1b[33m"
 #define CYAN    "\x1b[36m"
 #define GREEN   "\x1b[32m"
 #define RESET   "\x1b[0m"
+// em parser.h, adicionar na struct Parser:
+#define MAX_LOOP_DEPTH 32
+
+typedef struct {
+    char l_inicio[32];  // usado pelo continue
+    char l_end[32];     // usado pelo break
+} LoopContext;
 
 typedef struct Scope Scope;
 
@@ -18,11 +26,15 @@ typedef struct {
     Scope *current_scope;
     int quantidade_erros;
     int em_recuperacao;
+    CodeGen *cg;
+    int last_reg;
+    LoopContext loop_stack[MAX_LOOP_DEPTH];
+    int loop_depth;
 } Parser;
 
 // =========== Infraestrutura do Parser ===========
 
-void inicializar_parser(Parser *parser, Lexer *lexer);
+void inicializar_parser(Parser *parser, Lexer *lexer, CodeGen *cg);
 void avancar_token(Parser *parser);
 
 // Retornam 0 para indicar falha — permite propagação de erro

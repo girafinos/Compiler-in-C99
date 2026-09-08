@@ -8,6 +8,8 @@
 
 # Folders
 lexer_analyzer/bin/
+compiler/trash/
+compiler/tests/
 
 # Executables
 lexer
